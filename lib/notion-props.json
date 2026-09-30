@@ -1,0 +1,34 @@
+{
+  "_note": "Property keys the app uses. Run `npm run notion:ids` to replace these names with Notion property IDs, so renaming columns in Notion won't break the app.",
+  "supervisors": {
+    "name": "title",
+    "email": "POUb",
+    "password": "wF%3Af",
+    "active": "%7Bj_V"
+  },
+  "projects": {
+    "name": "title",
+    "status": "V%5DdZ",
+    "division": "b%3A%3BZ"
+  },
+  "buildings": {
+    "name": "title",
+    "type": "%7CC%3Dn",
+    "number": "%3BIr%3E",
+    "project": "gJXJ",
+    "lastReported": "%3FBbK",
+    "progress": "HBVK",
+    "completed": "%3DK%7B%5C",
+    "sq": "zv~a"
+  },
+  "elevations": {
+    "code": "title",
+    "name": "d%5E%3BA",
+    "building": "Wbr%7C",
+    "percent": "S%7Bmz",
+    "completed": "KzON",
+    "submittedBy": "akqz",
+    "submitterEmail": "AZMg",
+    "project": "AF%3DO"
+  }
+}
