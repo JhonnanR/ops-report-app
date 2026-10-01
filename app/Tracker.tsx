@@ -19,7 +19,8 @@ type Building = {
   type: string;
   number: number | null;
   elevationCount: number;
-  percent: number | null; // simple average of its elevations
+  sqCount: number; // elevations that have SQ (0 = using simple average)
+  percent: number | null; // weighted by elevation SQ (or simple average if none have SQ)
 };
 type Elevation = {
   id: string;
@@ -193,7 +194,11 @@ export default function Tracker({ supervisorName }: { supervisorName: string }) 
   return (
     <main className="shell">
       <div className="topbar">
-        <h1>Ops Report</h1>
+        <div className="brand">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icons/icon-192.png" alt="" width={32} height={32} />
+          <h1>Ops Report</h1>
+        </div>
         <div className="who">
           {supervisorName} ·{" "}
           <button className="btn link" onClick={logout}>
@@ -253,7 +258,9 @@ export default function Tracker({ supervisorName }: { supervisorName: string }) 
         {building && (
           <div className="hint">
             {building.type ? `${building.type} · ` : ""}
-            {building.elevationCount} elevation{building.elevationCount === 1 ? "" : "s"}
+            {building.sqCount > 0 && building.sqCount < building.elevationCount
+              ? `${building.sqCount} of ${building.elevationCount} elevations have SQ`
+              : `${building.elevationCount} elevation${building.elevationCount === 1 ? "" : "s"}`}
           </div>
         )}
       </div>
@@ -308,7 +315,7 @@ export default function Tracker({ supervisorName }: { supervisorName: string }) 
               aria-label="Completion percent slider"
             />
             <div className="ticks" aria-hidden="true">
-              {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100].map((n) => (
+              {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((n) => (
                 <span key={n} className={n % 20 ? "minor" : ""} style={{ left: `${n}%` }}>
                   {n % 20 ? "" : n}
                 </span>

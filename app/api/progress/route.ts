@@ -1,35 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { config, props } from "@/lib/config";
-import {
-  findProp,
-  getPage,
-  isNotionId,
-  queryAll,
-  readNumber,
-  readRelationIds,
-  readText,
-  updatePage,
-} from "@/lib/notion";
+import { findProp, getPage, isNotionId, queryAll, readNumber, readRelationIds, updatePage } from "@/lib/notion";
+import { buildingPercent, elevationsByBuilding, norm } from "@/lib/progress";
 import { getSession } from "@/lib/session";
 
-const norm = (id: string) => id.replace(/-/g, "");
-
-/** Average % of a building's elevations (0–100), using `override` for the one just saved. */
-async function buildingAverage(buildingId: string, override: { id: string; percent: number }) {
-  const e = props.elevations;
+/** Building % (0–100) after this save: weighted by elevation SQ, or simple average if none have SQ. */
+async function buildingAverage(buildingId: string, saved: { id: string; percent: number }) {
   const pages = await queryAll(config.elevationsDb, {
-    filter: { property: e.building, relation: { contains: buildingId } },
+    filter: { property: props.elevations.building, relation: { contains: buildingId } },
   });
-
-  const values = pages
-    // same rule as the dropdown: ignore "Test…" elevations unless enabled
-    .filter((pg) => config.showTestElevations || !/^test/i.test(readText(pg, e.name)))
-    .map((pg) =>
-      norm(pg.id) === norm(override.id) ? override.percent : Math.round((readNumber(pg, e.percent) ?? 0) * 100),
-    );
-
-  if (values.length === 0) return override.percent;
-  return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+  const rows = (elevationsByBuilding(pages).get(norm(buildingId)) ?? []).map((r) =>
+    r.id === norm(saved.id) ? { ...r, percent: saved.percent } : r,
+  );
+  const bp = buildingPercent(rows);
+  return bp.percent === null ? saved.percent : Math.round(bp.percent);
 }
 
 export async function POST(req: NextRequest) {
@@ -73,7 +57,7 @@ export async function POST(req: NextRequest) {
     [e.submitterEmail]: { email: session.email || null },
   });
 
-  // 2. Roll up to the building: average of its elevations.
+  // 2. Roll up to the building.
   const now = new Date().toISOString();
   const buildingPercents = await Promise.all(
     buildingIds.map(async (id) => {

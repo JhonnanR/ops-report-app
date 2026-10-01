@@ -15,30 +15,37 @@ export function elevationPercent(page: NotionPage): number {
   return Math.round((readNumber(page, props.elevations.percent) ?? 0) * 100);
 }
 
-/** Group elevation percentages by building id (normalized). Hidden elevations skipped. */
-export function elevationsByBuilding(elevationPages: NotionPage[]): Map<string, number[]> {
-  const map = new Map<string, number[]>();
+export type ElevationRow = { id: string; percent: number; sq: number | null };
+
+/** Group elevations (percent + SQ) by building id (normalized). Hidden elevations skipped. */
+export function elevationsByBuilding(elevationPages: NotionPage[]): Map<string, ElevationRow[]> {
+  const map = new Map<string, ElevationRow[]>();
   for (const el of elevationPages) {
     if (isHiddenElevation(el)) continue;
+    const row: ElevationRow = {
+      id: norm(el.id),
+      percent: elevationPercent(el),
+      sq: readNumber(el, props.elevations.sq),
+    };
     for (const bid of readRelationIds(el, props.elevations.building)) {
       const key = norm(bid);
       if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(elevationPercent(el));
+      map.get(key)!.push(row);
     }
   }
   return map;
 }
 
-/** Simple average: every elevation has the same weight. Null if there are none. */
+/** Simple average: every item has the same weight. Null if there are none. */
 export function simpleAverage(values: number[]): number | null {
   if (values.length === 0) return null;
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
 /**
- * Weighted average for a project:
- *   Σ (building % × building SQ) ÷ Σ (building SQ)
- * Buildings missing a % or an SQ are left out of both sums.
+ * Weighted average:
+ *   Σ (% × SQ) ÷ Σ (SQ)
+ * Items missing a % or an SQ are left out of both sums.
  */
 export function weightedAverage(items: { percent: number | null; sq: number | null }[]) {
   const usable = items.filter(
@@ -48,4 +55,24 @@ export function weightedAverage(items: { percent: number | null; sq: number | nu
   if (totalSq === 0) return { percent: null, included: 0, total: items.length };
   const weighted = usable.reduce((a, i) => a + i.percent * i.sq, 0);
   return { percent: weighted / totalSq, included: usable.length, total: items.length };
+}
+
+/**
+ * Building % from its elevations.
+ * - Weighted by elevation SQ when at least one elevation has SQ
+ *   (elevations without SQ are left out).
+ * - Otherwise falls back to a simple average of all its elevations.
+ */
+export function buildingPercent(elevations: ElevationRow[]) {
+  const w = weightedAverage(elevations);
+  if (w.percent !== null) {
+    return { percent: w.percent, method: "weighted" as const, included: w.included, total: w.total };
+  }
+  const s = simpleAverage(elevations.map((e) => e.percent));
+  return {
+    percent: s,
+    method: s === null ? null : ("simple" as const),
+    included: elevations.length,
+    total: elevations.length,
+  };
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { config, props } from "@/lib/config";
 import { isNotionId, queryAll, readNumber, readText } from "@/lib/notion";
-import { elevationsByBuilding, norm, simpleAverage } from "@/lib/progress";
+import { buildingPercent, elevationsByBuilding, norm } from "@/lib/progress";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -23,15 +23,17 @@ export async function GET(req: NextRequest) {
 
   const buildings = buildingPages
     .map((pg) => {
-      const values = elevByBuilding.get(norm(pg.id)) ?? [];
-      const avg = simpleAverage(values); // simple average, equal weight per elevation
+      const rows = elevByBuilding.get(norm(pg.id)) ?? [];
+      // Weighted by elevation SQ; simple average if no elevation has SQ yet.
+      const bp = buildingPercent(rows);
       return {
         id: pg.id,
         name: readText(pg, b.name),
         type: readText(pg, b.type),
         number: readNumber(pg, b.number),
-        elevationCount: values.length,
-        percent: avg === null ? null : Math.round(avg),
+        elevationCount: rows.length,
+        sqCount: bp.method === "weighted" ? bp.included : 0, // elevations that have SQ
+        percent: bp.percent === null ? null : Math.round(bp.percent),
       };
     })
     .sort((a, z) => (a.number ?? 9999) - (z.number ?? 9999) || a.name.localeCompare(z.name));

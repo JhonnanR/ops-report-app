@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { config, props } from "@/lib/config";
 import { queryAll, readNumber, readRelationIds, readText } from "@/lib/notion";
-import { elevationsByBuilding, norm, simpleAverage, weightedAverage } from "@/lib/progress";
+import { buildingPercent, elevationsByBuilding, norm, weightedAverage } from "@/lib/progress";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -37,15 +37,15 @@ export async function GET() {
     readRelationIds(el, e.project).forEach((id) => withElevations.add(norm(id)));
   }
 
-  // Building % (simple average of its elevations) grouped by project, with SQ.
+  // Building % (weighted by elevation SQ, or simple average) grouped by project, with building SQ.
   const elevByBuilding = elevationsByBuilding(elevationPages);
   const buildingsByProject = new Map<string, { percent: number | null; sq: number | null }[]>();
   for (const bp of buildingPages) {
-    const values = elevByBuilding.get(norm(bp.id)) ?? [];
-    const row = { percent: simpleAverage(values), sq: readNumber(bp, b.sq) };
+    const rows = elevByBuilding.get(norm(bp.id)) ?? [];
+    const row = { percent: buildingPercent(rows).percent, sq: readNumber(bp, b.sq) };
     for (const pid of readRelationIds(bp, b.project)) {
       const key = norm(pid);
-      if (values.length) withElevations.add(key);
+      if (rows.length) withElevations.add(key);
       if (!buildingsByProject.has(key)) buildingsByProject.set(key, []);
       buildingsByProject.get(key)!.push(row);
     }
@@ -54,7 +54,7 @@ export async function GET() {
   const projects = projectPages
     .filter((pg) => withElevations.has(norm(pg.id)))
     .map((pg) => {
-      // Project % = Σ(building % × SQ) ÷ Σ SQ
+      // Project % = Σ(building % × building SQ) ÷ Σ building SQ
       const w = weightedAverage(buildingsByProject.get(norm(pg.id)) ?? []);
       return {
         id: pg.id,

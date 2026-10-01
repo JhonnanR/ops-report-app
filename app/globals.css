@@ -133,3 +133,5 @@ input:disabled, select:disabled { background: #eef1f5; color: var(--muted); }
 }
 /* Elevation: plain dropdown (no typing) */
 .combo.plain input { cursor: pointer; caret-color: transparent; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand img { width: 32px; height: 32px; }
