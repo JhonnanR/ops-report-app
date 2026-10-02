@@ -49,7 +49,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not an elevation record" }, { status: 400 });
   }
   const buildingIds = readRelationIds(page, e.building);
-  const projectIds = readRelationIds(page, e.project);
+  let projectIds = readRelationIds(page, e.project);
+  // Many elevations don't have Project filled in. Fall back to the building's project.
+  if (projectIds.length === 0 && buildingIds.length) {
+    const buildingPages = await Promise.all(buildingIds.map((id) => getPage(id).catch(() => null)));
+    projectIds = [
+      ...new Set(buildingPages.flatMap((bp) => (bp ? readRelationIds(bp, b.project) : []))),
+    ];
+  }
 
   // Progress can only go up.
   const current = Math.round((readNumber(page, e.percent) ?? 0) * 100);

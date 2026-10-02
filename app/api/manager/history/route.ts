@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getManagerSession } from "@/lib/access";
 import { config, props } from "@/lib/config";
-import { isNotionId, queryPage, readDate, readNumber, readRelationIds, readText } from "@/lib/notion";
+import { isNotionId, queryAll, queryPage, readDate, readNumber, readRelationIds, readText } from "@/lib/notion";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +25,24 @@ export async function GET(req: NextRequest) {
   const from = q.get("from");
   const to = q.get("to");
 
-  if (isNotionId(projectId)) filters.push({ property: l.project, relation: { contains: projectId } });
-  if (isNotionId(buildingId)) filters.push({ property: l.building, relation: { contains: buildingId } });
-  if (isNotionId(elevationId)) filters.push({ property: l.elevation, relation: { contains: elevationId } });
+  // Use the most specific location chosen: elevation > building > project.
+  if (isNotionId(elevationId)) {
+    filters.push({ property: l.elevation, relation: { contains: elevationId } });
+  } else if (isNotionId(buildingId)) {
+    filters.push({ property: l.building, relation: { contains: buildingId } });
+  } else if (isNotionId(projectId)) {
+    // Match rows linked to the project directly OR to any of its buildings
+    // (older rows may not have Project filled in).
+    const buildings = await queryAll(config.buildingsDb, {
+      filter: { property: props.buildings.project, relation: { contains: projectId } },
+    });
+    filters.push({
+      or: [
+        { property: l.project, relation: { contains: projectId } },
+        ...buildings.slice(0, 90).map((bp) => ({ property: l.building, relation: { contains: bp.id } })),
+      ],
+    });
+  }
   if (supervisor) filters.push({ property: l.changedBy, rich_text: { equals: supervisor } });
   if (from && !Number.isNaN(Date.parse(from))) filters.push({ property: l.changedAt, date: { on_or_after: from } });
   if (to && !Number.isNaN(Date.parse(to))) filters.push({ property: l.changedAt, date: { before: to } });

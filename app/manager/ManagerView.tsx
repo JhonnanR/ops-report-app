@@ -338,7 +338,14 @@ export default function ManagerView({ userName }: { userName: string }) {
 
       {/* ---------- History ---------- */}
       <section className="card">
-        <h2 className="section-title">History</h2>
+        <div className="section-head">
+          <h2 className="section-title">History</h2>
+          {historyEnabled && hasFilters && (
+            <button type="button" className="btn link" onClick={() => setFilters(EMPTY_FILTERS)}>
+              Clear filters
+            </button>
+          )}
+        </div>
 
         {!historyEnabled ? (
           <div className="hint">History isn&apos;t set up yet (NOTION_LOG_DB is missing).</div>
@@ -406,11 +413,6 @@ export default function ManagerView({ userName }: { userName: string }) {
                 <input type="date" value={filters.to} onChange={(e) => setFilter("to", e.target.value)} />
               </label>
             </div>
-            {hasFilters && (
-              <button type="button" className="btn link" onClick={() => setFilters(EMPTY_FILTERS)}>
-                Clear filters
-              </button>
-            )}
 
             <div className="feed">
               {history.length === 0 && !loadingHistory && <div className="hint">No changes found.</div>}
