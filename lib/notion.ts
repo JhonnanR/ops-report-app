@@ -4,6 +4,7 @@ import { config } from "./config";
 const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export type NotionPage = {
   id: string;
   last_edited_time?: string;
@@ -49,12 +50,31 @@ export async function queryAll(
   return results;
 }
 
+/** Query one page of results (for "Load more" lists). */
+export async function queryPage(
+  databaseId: string,
+  body: { filter?: unknown; sorts?: unknown },
+  cursor?: string | null,
+  pageSize = 50,
+): Promise<{ results: NotionPage[]; nextCursor: string | null }> {
+  const data = await notion(`/databases/${databaseId}/query`, {
+    method: "POST",
+    body: { ...body, page_size: pageSize, ...(cursor ? { start_cursor: cursor } : {}) },
+  });
+  return { results: data.results, nextCursor: data.has_more ? data.next_cursor : null };
+}
+
 export function getPage(pageId: string): Promise<NotionPage> {
   return notion(`/pages/${pageId}`, { method: "GET" });
 }
 
 export function updatePage(pageId: string, properties: Record<string, unknown>) {
   return notion(`/pages/${pageId}`, { method: "PATCH", body: { properties } });
+}
+
+/** Add a new row to a database. */
+export function createPage(databaseId: string, properties: Record<string, unknown>): Promise<NotionPage> {
+  return notion(`/pages`, { method: "POST", body: { parent: { database_id: databaseId }, properties } });
 }
 
 /* ---------- property readers ---------- */
@@ -92,6 +112,11 @@ export function readText(page: NotionPage, key: string): string {
 export function readNumber(page: NotionPage, key: string): number | null {
   const p = findProp(page, key);
   return p?.type === "number" ? p.number : null;
+}
+
+export function readDate(page: NotionPage, key: string): string | null {
+  const p = findProp(page, key);
+  return p?.type === "date" ? (p.date?.start ?? null) : null;
 }
 
 export function readRelationIds(page: NotionPage, key: string): string[] {

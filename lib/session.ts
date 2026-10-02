@@ -9,6 +9,7 @@ export type Session = {
   id: string; // Authorized Supervisors page id
   name: string;
   email: string;
+  role?: string; // Role column (older sessions may not have it)
   exp: number; // unix ms
 };
 

@@ -26,6 +26,10 @@ export const config = {
   get elevationsDb() {
     return required("NOTION_ELEVATIONS_DB");
   },
+  /** Elevation Progress Log DB. Optional: if not set, history is simply skipped. */
+  get logDb(): string | null {
+    return process.env.NOTION_LOG_DB || null;
+  },
   get showTestElevations() {
     return process.env.SHOW_TEST_ELEVATIONS === "true";
   },
@@ -45,4 +49,5 @@ export const props = {
   projects: propsJson.projects,
   buildings: propsJson.buildings,
   elevations: propsJson.elevations,
+  log: propsJson.log,
 };

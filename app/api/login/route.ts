@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
     id: sup.id,
     name: readText(sup, p.name),
     email: readText(sup, p.email),
+    role: readText(sup, p.role),
   });
 
   const res = NextResponse.json({ ok: true, name: readText(sup, p.name) });

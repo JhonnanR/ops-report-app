@@ -1,7 +1,9 @@
 // Looks up the Notion property IDs for every column the app uses and writes
 // them into lib/notion-props.json. Run once:  npm run notion:ids
-// IDs don't change when a column is renamed. Re-run only if a column is
-// deleted and re-created, or a new field is added to the app.
+//
+// Property IDs never change when a column is renamed, so after this runs the
+// app keeps working through renames. Re-run only if a column is deleted and
+// re-created, or if you add a new field to the app.
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -10,6 +12,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const propsFile = resolve(root, "lib", "notion-props.json");
 
+// --- load .env.local / .env without extra dependencies ---
 for (const f of [".env.local", ".env"]) {
   const p = resolve(root, f);
   if (!existsSync(p)) continue;
@@ -30,6 +33,7 @@ const databases = {
   projects: process.env.NOTION_PROJECTS_DB,
   buildings: process.env.NOTION_BUILDINGS_DB,
   elevations: process.env.NOTION_ELEVATIONS_DB,
+  log: process.env.NOTION_LOG_DB, // optional
 };
 
 const current = JSON.parse(readFileSync(propsFile, "utf8"));
@@ -38,6 +42,11 @@ let problems = 0;
 
 for (const [group, dbId] of Object.entries(databases)) {
   if (!dbId) {
+    if (group === "log") {
+      console.log("\nlog: NOTION_LOG_DB not set, skipped");
+      out[group] = current[group];
+      continue;
+    }
     console.error(`Missing env var for ${group} database.`);
     process.exit(1);
   }
@@ -49,11 +58,12 @@ for (const [group, dbId] of Object.entries(databases)) {
     process.exit(1);
   }
   const db = await res.json();
-  const schema = Object.values(db.properties);
+  const schema = Object.values(db.properties); // [{ id, name, type }]
 
   out[group] = {};
   console.log(`\n${group}`);
   for (const [field, key] of Object.entries(current[group])) {
+    // Accept an existing ID or a column name.
     const match = schema.find((p) => p.id === key || p.name === key);
     if (!match) {
       problems++;

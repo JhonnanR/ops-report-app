@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { config, props } from "@/lib/config";
-import { isNotionId, queryAll, readNumber, readText } from "@/lib/notion";
+import { isNotionId, queryAll, readDate, readNumber, readText } from "@/lib/notion";
 import { buildingPercent, elevationsByBuilding, norm } from "@/lib/progress";
 import { getSession } from "@/lib/session";
 
@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
         elevationCount: rows.length,
         sqCount: bp.method === "weighted" ? bp.included : 0, // elevations that have SQ
         percent: bp.percent === null ? null : Math.round(bp.percent),
+        lastReported: readDate(pg, b.lastReported),
       };
     })
     .sort((a, z) => (a.number ?? 9999) - (z.number ?? 9999) || a.name.localeCompare(z.name));

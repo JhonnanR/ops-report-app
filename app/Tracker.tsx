@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SearchSelect, { type Option } from "@/components/SearchSelect";
 import { timeAgo } from "@/lib/timeAgo";
@@ -44,7 +45,13 @@ async function getJson<T>(url: string): Promise<T> {
   return data as T;
 }
 
-export default function Tracker({ supervisorName }: { supervisorName: string }) {
+export default function Tracker({
+  supervisorName,
+  canManage = false,
+}: {
+  supervisorName: string;
+  canManage?: boolean;
+}) {
   const router = useRouter();
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -206,6 +213,15 @@ export default function Tracker({ supervisorName }: { supervisorName: string }) 
           </button>
         </div>
       </div>
+
+      {canManage && (
+        <nav className="tabs">
+          <span className="tab active">Report</span>
+          <Link className="tab" href="/manager">
+            Manager view
+          </Link>
+        </nav>
+      )}
 
       <div className="card">
         <label className="field">
