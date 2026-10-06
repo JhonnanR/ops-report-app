@@ -9,6 +9,7 @@ type Project = {
   id: string;
   name: string;
   status: string;
+  divisions: string[];
   percent: number | null;
   included: number;
   total: number;
@@ -82,13 +83,21 @@ function localDayToIso(day: string, addDays = 0): string {
   return d.toISOString();
 }
 
-function Bar({ percent }: { percent: number | null }) {
-  const p = percent ?? 0;
+/** Small pie chart + % bubble, coloured by level (project / building / elevation). */
+function Progress({ percent }: { percent: number | null }) {
+  const p = Math.max(0, Math.min(100, percent ?? 0));
   return (
-    <div className="bar" aria-label={`${p}% completed`}>
-      <div className="bar-fill" style={{ width: `${p}%` }} />
-    </div>
+    <span className="progress" aria-label={percent === null ? "No progress yet" : `${p}% completed`}>
+      <span className="pie" style={{ ["--p" as string]: `${p}%` }} />
+      <span className="chip chip-pct">{percent === null ? "—" : `${p}%`}</span>
+    </span>
   );
+}
+
+/** "Meridian Forty54 - Cabana - 5" → "Cabana - 5" (the project is already shown above it). */
+function shortName(name: string): string {
+  const parts = name.split(" - ");
+  return parts.length > 1 ? parts.slice(1).join(" - ") : name;
 }
 
 export default function ManagerView({ userName }: { userName: string }) {
@@ -104,8 +113,9 @@ export default function ManagerView({ userName }: { userName: string }) {
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [error, setError] = useState("");
 
-  const [openProject, setOpenProject] = useState<string | null>(null);
-  const [openBuilding, setOpenBuilding] = useState<string | null>(null);
+  const [openProjects, setOpenProjects] = useState<Set<string>>(new Set());
+  const [openBuildings, setOpenBuildings] = useState<Set<string>>(new Set());
+  const [division, setDivision] = useState(""); // "" = all divisions
   const [buildingsBy, setBuildingsBy] = useState<Record<string, Building[]>>({});
   const [elevationsBy, setElevationsBy] = useState<Record<string, Elevation[]>>({});
 
@@ -116,10 +126,15 @@ export default function ManagerView({ userName }: { userName: string }) {
       .finally(() => setLoadingProjects(false));
   }, []);
 
+  const toggleIn = (set: Set<string>, id: string) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  };
+
   async function toggleProject(id: string) {
-    setOpenBuilding(null);
-    if (openProject === id) return setOpenProject(null);
-    setOpenProject(id);
+    setOpenProjects((s) => toggleIn(s, id));
     if (!buildingsBy[id]) {
       const d = await getJson<{ buildings: Building[] }>(`/api/buildings?projectId=${id}`).catch(() => ({
         buildings: [],
@@ -129,8 +144,7 @@ export default function ManagerView({ userName }: { userName: string }) {
   }
 
   async function toggleBuilding(id: string) {
-    if (openBuilding === id) return setOpenBuilding(null);
-    setOpenBuilding(id);
+    setOpenBuildings((s) => toggleIn(s, id));
     if (!elevationsBy[id]) {
       const d = await getJson<{ elevations: Elevation[] }>(`/api/elevations?buildingId=${id}`).catch(() => ({
         elevations: [],
@@ -138,6 +152,15 @@ export default function ManagerView({ userName }: { userName: string }) {
       setElevationsBy((m) => ({ ...m, [id]: d.elevations }));
     }
   }
+
+  function collapseAll() {
+    setOpenProjects(new Set());
+    setOpenBuildings(new Set());
+  }
+
+  const divisions = Array.from(new Set(projects.flatMap((p) => p.divisions))).sort();
+  const visibleProjects = division ? projects.filter((p) => p.divisions.includes(division)) : projects;
+  const anyOpen = openProjects.size > 0 || openBuildings.size > 0;
 
   /* ---------------- History ---------------- */
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
@@ -266,63 +289,87 @@ export default function ManagerView({ userName }: { userName: string }) {
 
       {/* ---------- Projects overview ---------- */}
       <section className="card">
-        <h2 className="section-title">Projects</h2>
+        <h2 className="page-title">Projects</h2>
+
+        <div className="toolbar">
+          <div className="chips" role="group" aria-label="Filter by division">
+            <button type="button" className={`chip-btn${division === "" ? " on" : ""}`} onClick={() => setDivision("")}>
+              All
+            </button>
+            {divisions.map((d) => (
+              <button
+                key={d}
+                type="button"
+                className={`chip-btn${division === d ? " on" : ""}`}
+                onClick={() => setDivision(d)}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="btn link" onClick={collapseAll} disabled={!anyOpen}>
+            Collapse all
+          </button>
+        </div>
+
         {loadingProjects && <div className="hint">Loading projects…</div>}
-        {!loadingProjects && projects.length === 0 && <div className="hint">No active projects.</div>}
+        {!loadingProjects && visibleProjects.length === 0 && <div className="hint">No active projects.</div>}
 
         <ul className="tree">
-          {projects.map((p) => (
+          {visibleProjects.map((p) => (
             <li key={p.id}>
-              <button type="button" className="tree-row" onClick={() => toggleProject(p.id)}>
-                <span className="caret">{openProject === p.id ? "▾" : "▸"}</span>
-                <span className="tree-name">
-                  {p.name}
-                  <span className="tree-sub">
-                    {p.status ? `${p.status} · ` : ""}
-                    {p.total} building{p.total === 1 ? "" : "s"}
-                    {p.lastReported ? ` · last report ${timeAgo(p.lastReported, now)}` : " · no reports yet"}
-                  </span>
+              <button type="button" className="tree-row level-1" onClick={() => toggleProject(p.id)}>
+                <span className="caret">{openProjects.has(p.id) ? "▾" : "▸"}</span>
+                <span className="tree-title">
+                  <span className="tree-name-text">{p.name}</span>
+                  {p.status && <span className="tag">{p.status}</span>}
                 </span>
-                <Bar percent={p.percent} />
-                <span className="tree-pct">{p.percent !== null ? `${p.percent}%` : "—"}</span>
+                <Progress percent={p.percent} />
+                <span className="chip">
+                  {p.total} building{p.total === 1 ? "" : "s"}
+                </span>
+                <span className="tree-when">
+                  {p.lastReported ? `Last report ${timeAgo(p.lastReported, now)}` : "No reports yet"}
+                </span>
               </button>
 
-              {openProject === p.id && (
+              {openProjects.has(p.id) && (
                 <ul className="tree nested">
                   {!buildingsBy[p.id] && <li className="hint">Loading buildings…</li>}
                   {buildingsBy[p.id]?.length === 0 && <li className="hint">No buildings.</li>}
                   {buildingsBy[p.id]?.map((b) => (
                     <li key={b.id}>
-                      <button type="button" className="tree-row" onClick={() => toggleBuilding(b.id)}>
-                        <span className="caret">{openBuilding === b.id ? "▾" : "▸"}</span>
-                        <span className="tree-name">
-                          {b.name}
-                          <span className="tree-sub">
-                            {b.type ? `${b.type} · ` : ""}
-                            {b.elevationCount} elevation{b.elevationCount === 1 ? "" : "s"}
-                            {b.lastReported ? ` · last report ${timeAgo(b.lastReported, now)}` : ""}
-                          </span>
+                      <button type="button" className="tree-row level-2" onClick={() => toggleBuilding(b.id)}>
+                        <span className="caret">{openBuildings.has(b.id) ? "▾" : "▸"}</span>
+                        <span className="tree-title" title={b.name}>
+                          <span className="tree-name-text">{shortName(b.name)}</span>
                         </span>
-                        <Bar percent={b.percent} />
-                        <span className="tree-pct">{b.percent !== null ? `${b.percent}%` : "—"}</span>
+                        <Progress percent={b.percent} />
+                        <span className="chip">
+                          {b.elevationCount} elevation{b.elevationCount === 1 ? "" : "s"}
+                        </span>
+                        <span className="tree-when">
+                          {b.lastReported ? `Last report ${timeAgo(b.lastReported, now)}` : "No reports yet"}
+                        </span>
                       </button>
 
-                      {openBuilding === b.id && (
+                      {openBuildings.has(b.id) && (
                         <ul className="tree nested">
                           {!elevationsBy[b.id] && <li className="hint">Loading elevations…</li>}
                           {elevationsBy[b.id]?.length === 0 && <li className="hint">No elevations.</li>}
                           {elevationsBy[b.id]?.map((el) => (
-                            <li key={el.id} className="tree-row static">
+                            <li key={el.id} className="tree-row level-3 static">
                               <span className="caret" />
-                              <span className="tree-name">
-                                {el.name}
-                                <span className="tree-sub">
-                                  {el.submittedBy ? `Last reported by ${el.submittedBy}` : "Not reported yet"}
-                                  {el.lastEdited ? ` · ${timeAgo(el.lastEdited, now)}` : ""}
-                                </span>
+                              <span className="tree-title">
+                                <span className="tree-name-text">{el.name}</span>
                               </span>
-                              <Bar percent={el.percent} />
-                              <span className="tree-pct">{el.percent ?? 0}%</span>
+                              <Progress percent={el.percent ?? 0} />
+                              <span className="chip-spacer" />
+                              <span className="tree-when">
+                                {el.submittedBy
+                                  ? `${el.submittedBy}${el.lastEdited ? ` · ${timeAgo(el.lastEdited, now)}` : ""}`
+                                  : "Not reported yet"}
+                              </span>
                             </li>
                           ))}
                         </ul>

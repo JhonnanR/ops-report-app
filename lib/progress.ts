@@ -58,21 +58,31 @@ export function weightedAverage(items: { percent: number | null; sq: number | nu
 }
 
 /**
- * Building % from its elevations.
- * - Weighted by elevation SQ when at least one elevation has SQ
- *   (elevations without SQ are left out).
- * - Otherwise falls back to a simple average of all its elevations.
+ * Roll a list of child %s up into one parent % (used for elevations → building and buildings → project).
+ * - Children with no % yet are left out.
+ * - If every remaining child has an SQ, it's a weighted average: Σ(% × SQ) ÷ Σ SQ.
+ * - If any of them is missing SQ, it falls back to a simple average, so one missing
+ *   SQ never hides the other children's progress.
  */
-export function buildingPercent(elevations: ElevationRow[]) {
-  const w = weightedAverage(elevations);
-  if (w.percent !== null) {
-    return { percent: w.percent, method: "weighted" as const, included: w.included, total: w.total };
+export function rollup(items: { percent: number | null; sq: number | null }[]) {
+  const withPct = items.filter((i): i is { percent: number; sq: number | null } => i.percent !== null);
+  if (withPct.length === 0) {
+    return { percent: null, method: null, included: 0, total: items.length };
   }
-  const s = simpleAverage(elevations.map((e) => e.percent));
+  const allHaveSq = withPct.every((i) => i.sq !== null && i.sq > 0);
+  if (allHaveSq) {
+    const w = weightedAverage(withPct);
+    return { percent: w.percent, method: "weighted" as const, included: withPct.length, total: items.length };
+  }
   return {
-    percent: s,
-    method: s === null ? null : ("simple" as const),
-    included: elevations.length,
-    total: elevations.length,
+    percent: simpleAverage(withPct.map((i) => i.percent)),
+    method: "simple" as const,
+    included: withPct.length,
+    total: items.length,
   };
+}
+
+/** Building % from its elevations (see rollup). */
+export function buildingPercent(elevations: ElevationRow[]) {
+  return rollup(elevations);
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { config, props } from "@/lib/config";
-import { queryAll, readNumber, readRelationIds, readText } from "@/lib/notion";
-import { buildingPercent, elevationsByBuilding, norm, weightedAverage } from "@/lib/progress";
+import { findProp, queryAll, readDate, readNumber, readRelationIds, readText } from "@/lib/notion";
+import { buildingPercent, elevationsByBuilding, norm, rollup } from "@/lib/progress";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -40,29 +40,38 @@ export async function GET() {
   // Building % (weighted by elevation SQ, or simple average) grouped by project, with building SQ.
   const elevByBuilding = elevationsByBuilding(elevationPages);
   const buildingsByProject = new Map<string, { percent: number | null; sq: number | null }[]>();
+  const lastReportedByProject = new Map<string, string>();
   for (const bp of buildingPages) {
     const rows = elevByBuilding.get(norm(bp.id)) ?? [];
     const row = { percent: buildingPercent(rows).percent, sq: readNumber(bp, b.sq) };
+    const reported = readDate(bp, b.lastReported);
     for (const pid of readRelationIds(bp, b.project)) {
       const key = norm(pid);
       if (rows.length) withElevations.add(key);
       if (!buildingsByProject.has(key)) buildingsByProject.set(key, []);
       buildingsByProject.get(key)!.push(row);
+      // Most recent report across the project's buildings
+      if (reported && (!lastReportedByProject.has(key) || reported > lastReportedByProject.get(key)!)) {
+        lastReportedByProject.set(key, reported);
+      }
     }
   }
 
   const projects = projectPages
     .filter((pg) => withElevations.has(norm(pg.id)))
     .map((pg) => {
-      // Project % = Σ(building % × building SQ) ÷ Σ building SQ
-      const w = weightedAverage(buildingsByProject.get(norm(pg.id)) ?? []);
+      // Project % comes from its buildings' %s (weighted by building SQ when all have SQ).
+      const w = rollup(buildingsByProject.get(norm(pg.id)) ?? []);
+      const division = findProp(pg, p.division);
       return {
         id: pg.id,
         name: readText(pg, p.name),
         status: readText(pg, p.status),
+        divisions: (division?.multi_select ?? []).map((o: { name: string }) => o.name) as string[],
         percent: w.percent === null ? null : Math.round(w.percent),
-        included: w.included, // buildings with both SQ and elevations
+        included: w.included, // buildings that have progress
         total: w.total, // all buildings on the project
+        lastReported: lastReportedByProject.get(norm(pg.id)) ?? null,
       };
     })
     .filter((x) => x.name);
