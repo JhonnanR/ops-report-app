@@ -253,7 +253,6 @@ export default function ManagerView({ userName }: { userName: string }) {
     });
   }
 
-  const projectName = (id: string | null) => projects.find((p) => p.id === id)?.name ?? "";
   const hasFilters = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
 
   async function logout() {
@@ -307,8 +306,8 @@ export default function ManagerView({ userName }: { userName: string }) {
               </button>
             ))}
           </div>
-          <button type="button" className="btn link" onClick={collapseAll} disabled={!anyOpen}>
-            Collapse all
+          <button type="button" className="btn-tool" onClick={collapseAll} disabled={!anyOpen}>
+            ⊟ Collapse all
           </button>
         </div>
 
@@ -323,11 +322,11 @@ export default function ManagerView({ userName }: { userName: string }) {
                 <span className="tree-title">
                   <span className="tree-name-text">{p.name}</span>
                   {p.status && <span className="tag">{p.status}</span>}
+                  <span className="chip">
+                    {p.total} building{p.total === 1 ? "" : "s"}
+                  </span>
                 </span>
                 <Progress percent={p.percent} />
-                <span className="chip">
-                  {p.total} building{p.total === 1 ? "" : "s"}
-                </span>
                 <span className="tree-when">
                   {p.lastReported ? `Last report ${timeAgo(p.lastReported, now)}` : "No reports yet"}
                 </span>
@@ -343,11 +342,11 @@ export default function ManagerView({ userName }: { userName: string }) {
                         <span className="caret">{openBuildings.has(b.id) ? "▾" : "▸"}</span>
                         <span className="tree-title" title={b.name}>
                           <span className="tree-name-text">{shortName(b.name)}</span>
+                          <span className="chip">
+                            {b.elevationCount} elevation{b.elevationCount === 1 ? "" : "s"}
+                          </span>
                         </span>
                         <Progress percent={b.percent} />
-                        <span className="chip">
-                          {b.elevationCount} elevation{b.elevationCount === 1 ? "" : "s"}
-                        </span>
                         <span className="tree-when">
                           {b.lastReported ? `Last report ${timeAgo(b.lastReported, now)}` : "No reports yet"}
                         </span>
@@ -364,7 +363,6 @@ export default function ManagerView({ userName }: { userName: string }) {
                                 <span className="tree-name-text">{el.name}</span>
                               </span>
                               <Progress percent={el.percent ?? 0} />
-                              <span className="chip-spacer" />
                               <span className="tree-when">
                                 {el.submittedBy
                                   ? `${el.submittedBy}${el.lastEdited ? ` · ${timeAgo(el.lastEdited, now)}` : ""}`
@@ -385,14 +383,20 @@ export default function ManagerView({ userName }: { userName: string }) {
 
       {/* ---------- History ---------- */}
       <section className="card">
-        <div className="section-head">
-          <h2 className="section-title">History</h2>
-          {historyEnabled && hasFilters && (
-            <button type="button" className="btn link" onClick={() => setFilters(EMPTY_FILTERS)}>
-              Clear filters
+        <h2 className="page-title">History</h2>
+
+        {historyEnabled && (
+          <div className="toolbar toolbar-end">
+            <button
+              type="button"
+              className="btn-tool"
+              onClick={() => setFilters(EMPTY_FILTERS)}
+              disabled={!hasFilters}
+            >
+              ✕ Clear filters
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {!historyEnabled ? (
           <div className="hint">History isn&apos;t set up yet (NOTION_LOG_DB is missing).</div>
@@ -480,12 +484,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                           {formatWhen(h.at)}
                           <div className="tree-sub">{timeAgo(h.at, now)}</div>
                         </td>
-                        <td>
-                          {h.elevation}
-                          {h.projectId && !filters.projectId && (
-                            <div className="tree-sub">{projectName(h.projectId)}</div>
-                          )}
-                        </td>
+                        <td>{h.elevation}</td>
                         <td className="nowrap">
                           {h.from ?? 0}% → <strong>{h.to ?? 0}%</strong>
                         </td>

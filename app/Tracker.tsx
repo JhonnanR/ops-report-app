@@ -273,7 +273,6 @@ export default function Tracker({
         />
         {building && (
           <div className="hint">
-            {building.type ? `${building.type} · ` : ""}
             {building.sqCount > 0 && building.sqCount < building.elevationCount
               ? `${building.sqCount} of ${building.elevationCount} elevations have SQ`
               : `${building.elevationCount} elevation${building.elevationCount === 1 ? "" : "s"}`}

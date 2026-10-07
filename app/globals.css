@@ -161,13 +161,14 @@ input:disabled, select:disabled { background: #eef1f5; color: var(--muted); }
 
 /* ---------- Manager view: page title + toolbar ---------- */
 .page-title {
-  text-align: center; font-size: 26px; font-weight: 800; color: var(--brand);
-  margin: 4px 0 16px; letter-spacing: 0.01em;
+  text-align: center; font-size: 32px; font-weight: 800; color: var(--brand);
+  margin: 4px 0 18px; letter-spacing: 0.01em;
 }
 .toolbar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   flex-wrap: wrap; margin-bottom: 10px;
 }
+.toolbar-end { justify-content: flex-end; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip-btn {
   border: 1px solid var(--border); background: #fff; color: var(--text);
@@ -178,14 +179,14 @@ input:disabled, select:disabled { background: #eef1f5; color: var(--muted); }
 
 /* ---------- Manager view: project / building / elevation rows ---------- */
 /* One colour per level; lower levels are greyer. */
-.level-1 { --lvl: #1f5fa8; --row: #ffffff; }
-.level-2 { --lvl: #4f7fa8; --row: #f7f8fa; }
-.level-3 { --lvl: #8396ab; --row: #eff1f4; }
+.level-1 { --lvl: #3d86cf; --row: #ffffff; } /* Project: blue */
+.level-2 { --lvl: #2f9fae; --row: #f7f8fa; } /* Building: deeper cyan */
+.level-3 { --lvl: #5cb87a; --row: #eff1f4; } /* Elevation: lighter green */
 
 .tree { list-style: none; margin: 0; padding: 0; }
 .tree.nested { margin-left: 22px; border-left: 2px solid var(--border); padding-left: 8px; }
 .tree-row {
-  display: grid; grid-template-columns: 18px minmax(0, 1fr) 130px 120px 200px;
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) 130px 200px;
   gap: 12px; align-items: center;
   width: 100%; min-height: 48px; padding: 8px 10px; background: var(--row);
   border: 0; border-bottom: 1px solid var(--border);
@@ -215,7 +216,7 @@ input:disabled, select:disabled { background: #eef1f5; color: var(--muted); }
   font-size: 12px; font-weight: 600; white-space: nowrap;
 }
 .chip-pct {
-  min-width: 48px; background: var(--lvl); color: #fff; font-variant-numeric: tabular-nums;
+  min-width: 48px; background: var(--lvl); color: #0b2540; font-variant-numeric: tabular-nums;
 }
 
 /* Pie chart */
@@ -228,11 +229,11 @@ input:disabled, select:disabled { background: #eef1f5; color: var(--muted); }
 
 @media (max-width: 640px) {
   .tree-row { grid-template-columns: 14px minmax(0, 1fr) 92px 84px; gap: 8px; }
-  .tree-row > .chip, .tree-row > .chip-spacer { display: none; } /* counts hidden on small phones to keep one line */
-  .tree-title .tag { display: none; }
+  .tree-title .tag, .tree-title .chip { display: none; } /* tags + counts hidden on small phones to keep one line */
   .tree-when { font-size: 11px; white-space: normal; }
   .pie { width: 22px; height: 22px; }
   .chip-pct { min-width: 40px; }
+  .tree-title .chip { flex: none; }
 }
 
 /* ---------- Manager view: History ---------- */
@@ -255,4 +256,26 @@ input:disabled, select:disabled { background: #eef1f5; color: var(--muted); }
 .nowrap { white-space: nowrap; }
 .btn.secondary {
   background: #fff; color: var(--brand); border: 1px solid var(--border); margin-top: 12px;
+}
+/* Toolbar buttons (Collapse all / Clear filters) */
+.btn-tool {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--brand); border-radius: 999px;
+  background: #fff; color: var(--brand); cursor: pointer;
+}
+.btn-tool:hover:not(:disabled) { background: var(--brand); color: #fff; }
+.btn-tool:disabled { border-color: var(--border); color: var(--muted); cursor: default; opacity: 0.6; }
+.step::after { content: "."; }
+/* ---------- Phone: fixed, steady view ---------- */
+html, body { overflow-x: hidden; overscroll-behavior: none; }
+
+/* Dragging the slider only moves the slider, never the page */
+.range-wrap input[type="range"] { touch-action: none; }
+.pct-steppers button { touch-action: manipulation; }
+
+/* iPhone zooms in on any field under 16px: keep all inputs at 16px on phones */
+@media (max-width: 640px) {
+  input, select, textarea,
+  .filters select, .filters input[type="date"] { font-size: 16px; }
 }
