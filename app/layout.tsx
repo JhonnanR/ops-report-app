@@ -16,6 +16,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false, // fixed view on phones: no pinch/auto zoom
   themeColor: "#1f3a5f",
 };
 
