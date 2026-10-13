@@ -322,3 +322,7 @@ html, body { overflow-x: hidden; overscroll-behavior: none; }
 .reason-other { margin-top: 8px; }
 .down-flag { color: var(--err); font-weight: 700; }
 @media (max-width: 400px) { .reason-list { grid-template-columns: 1fr; } }
+/* Dropdown rows with a middle column (e.g. B1 · Type 1 · 73%) */
+.combo-list li { align-items: center; }
+.combo-label { font-weight: 600; min-width: 36px; }
+.combo-middle { flex: 1; text-align: center; color: var(--muted); font-size: 14px; }

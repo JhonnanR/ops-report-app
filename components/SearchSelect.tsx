@@ -2,7 +2,10 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-export type Option = { id: string; label: string; tag?: string };
+export type Option = { id: string; label: string; middle?: string; tag?: string };
+
+/** Text shown in the field once an option is picked, e.g. "B1 · Type 1". */
+const textOf = (o: Option) => (o.middle ? `${o.label} · ${o.middle}` : o.label);
 
 type Props = {
   options: Option[];
@@ -28,14 +31,14 @@ export default function SearchSelect({
   const listId = useId();
   const wrapRef = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.id === value) ?? null;
-  const [query, setQuery] = useState(selected?.label ?? "");
+  const [query, setQuery] = useState(selected ? textOf(selected) : "");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
 
   // Keep the text box in sync when a selection is made. (Parents reset this
   // component with a `key` when its options change.)
   useEffect(() => {
-    if (selected) setQuery(selected.label);
+    if (selected) setQuery(textOf(selected));
   }, [selected]);
 
   // Close when tapping outside.
@@ -43,7 +46,7 @@ export default function SearchSelect({
     function onDown(e: MouseEvent | TouchEvent) {
       if (!wrapRef.current?.contains(e.target as Node)) {
         setOpen(false);
-        setQuery(selected?.label ?? "");
+        setQuery(selected ? textOf(selected) : "");
       }
     }
     document.addEventListener("mousedown", onDown);
@@ -52,22 +55,22 @@ export default function SearchSelect({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("touchstart", onDown);
     };
-  }, [selected?.label]);
+  }, [selected]);
 
   const filtered = useMemo(() => {
     if (!searchable) return options;
     const q = query.trim().toLowerCase();
-    if (!q || q === selected?.label.toLowerCase()) return options;
+    if (!q || (selected && q === textOf(selected).toLowerCase())) return options;
     const words = q.split(/\s+/);
     return options.filter((o) => {
-      const hay = `${o.label} ${o.tag ?? ""}`.toLowerCase();
+      const hay = `${o.label} ${o.middle ?? ""} ${o.tag ?? ""}`.toLowerCase();
       return words.every((w) => hay.includes(w));
     });
-  }, [options, query, selected?.label, searchable]);
+  }, [options, query, selected, searchable]);
 
   function pick(o: Option) {
     onChange(o.id);
-    setQuery(o.label);
+    setQuery(textOf(o));
     setOpen(false);
   }
 
@@ -133,7 +136,8 @@ export default function SearchSelect({
                 pick(o);
               }}
             >
-              <span>{o.label}</span>
+              <span className="combo-label">{o.label}</span>
+              {o.middle && <span className="combo-middle">{o.middle}</span>}
               {o.tag && <span className="tag">{o.tag}</span>}
             </li>
           ))}

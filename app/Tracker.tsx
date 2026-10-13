@@ -173,7 +173,9 @@ export default function Tracker({
     () =>
       buildings.map((b) => ({
         id: b.id,
-        label: buildingLabel(b.name),
+        // "B1" + type in the middle ("Type 1", "Cabana"…). Falls back to the name if Bldg # is empty.
+        label: b.number !== null ? `B${b.number}` : buildingLabel(b.name),
+        middle: b.type ? b.type.replace(/^bldg\s+/i, "") : undefined,
         tag: b.percent !== null ? `${b.percent}% completed` : "No elevations",
       })),
     [buildings],
