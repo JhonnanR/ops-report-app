@@ -38,6 +38,7 @@ type HistoryRow = {
   to: number | null;
   by: string;
   at: string | null;
+  reason: string;
 };
 type Filters = {
   supervisor: string;
@@ -99,7 +100,11 @@ function shortName(name: string): string {
   const parts = name.split(" - ");
   return parts.length > 1 ? parts.slice(1).join(" - ") : name;
 }
-
+/** "Meridian Forty54 - Cabana - 5" → "Cabana 5" (project name and dashes removed) */
+function buildingLabel(name: string): string {
+  const parts = name.split(" - ").map((s) => s.trim()).filter(Boolean);
+  return (parts.length > 1 ? parts.slice(1) : parts).join(" ");
+}
 export default function ManagerView({ userName }: { userName: string }) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -435,7 +440,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                   <option value="">{filters.projectId ? "All buildings" : "Pick a project"}</option>
                   {filterBuildings.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {b.name}
+                      {buildingLabel(b.name)}
                     </option>
                   ))}
                 </select>
@@ -485,8 +490,12 @@ export default function ManagerView({ userName }: { userName: string }) {
                           <div className="tree-sub">{timeAgo(h.at, now)}</div>
                         </td>
                         <td>{h.elevation}</td>
-                        <td className="nowrap">
-                          {h.from ?? 0}% → <strong>{h.to ?? 0}%</strong>
+                        <td>
+                          <span className="nowrap">
+                            {h.from ?? 0}% → <strong>{h.to ?? 0}%</strong>
+                            {(h.to ?? 0) < (h.from ?? 0) && <span className="down-flag"> ↓</span>}
+                          </span>
+                          {h.reason && <div className="tree-sub">{h.reason}</div>}
                         </td>
                         <td>{h.by}</td>
                       </tr>

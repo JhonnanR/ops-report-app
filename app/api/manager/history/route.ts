@@ -65,6 +65,11 @@ export async function GET(req: NextRequest) {
     to: pct(readNumber(pg, l.to)),
     by: readText(pg, l.changedBy),
     at: readDate(pg, l.changedAt),
+    reason: (() => {
+      const choice = l.reason ? readText(pg, l.reason) : "";
+      const other = l.reasonOther ? readText(pg, l.reasonOther) : "";
+      return other ? `${choice || "Other"}: ${other}` : choice;
+    })(),
   }));
 
   return NextResponse.json({ history, nextCursor, enabled: true });

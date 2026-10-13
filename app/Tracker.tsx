@@ -34,6 +34,16 @@ type Elevation = {
 
 const STEP = 5;
 
+type Reason = { id: string; name: string };
+/** The reason whose name contains "Other" opens a text box. */
+const isOtherReason = (name: string) => /other/i.test(name);
+
+/** "Meridian Forty54 - Cabana - 5" → "Cabana 5" (project name and dashes removed) */
+function buildingLabel(name: string): string {
+  const parts = name.split(" - ").map((s) => s.trim()).filter(Boolean);
+  return (parts.length > 1 ? parts.slice(1) : parts).join(" ");
+}
+
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { cache: "no-store" });
   if (res.status === 401) {
@@ -80,11 +90,22 @@ export default function Tracker({
   const elevation = elevations.find((e) => e.id === elevationId) ?? null;
   const building = buildings.find((b) => b.id === buildingId) ?? null;
   const project = projects.find((p) => p.id === projectId) ?? null;
-  // Lowest allowed value = what's already saved. Progress only goes up.
-  const floor = elevation?.percent ?? 0;
+  // What's saved right now. Going below it needs a reason.
+  const current = elevation?.percent ?? 0;
+
+  // Reason for lowering a percentage. The list comes from the "Reason" Select column in Notion.
+  const [reasons, setReasons] = useState<Reason[]>([]);
+  const [reasonChoice, setReasonChoice] = useState(""); // option name
+  const [reasonOther, setReasonOther] = useState("");
+
+  useEffect(() => {
+    getJson<{ reasons: Reason[] }>("/api/reasons")
+      .then((d) => setReasons(d.reasons))
+      .catch(() => {});
+  }, []);
 
   function setPct(n: number) {
-    const v = Math.min(100, Math.max(floor, Math.round(n)));
+    const v = Math.min(100, Math.max(0, Math.round(n)));
     setPercent(v);
     setPctText(String(v));
   }
@@ -129,11 +150,13 @@ export default function Tracker({
       .finally(() => setLoading(null));
   }, [buildingId]);
 
-  // Start at the elevation's current value.
+  // Start at the elevation's current value, with no reason picked.
   useEffect(() => {
     const start = elevation?.percent ?? 0;
     setPercent(start);
     setPctText(String(start));
+    setReasonChoice("");
+    setReasonOther("");
   }, [elevation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const projectOptions: Option[] = useMemo(
@@ -149,7 +172,7 @@ export default function Tracker({
     () =>
       buildings.map((b) => ({
         id: b.id,
-        label: b.name,
+        label: buildingLabel(b.name),
         tag: b.percent !== null ? `${b.percent}% completed` : "No elevations",
       })),
     [buildings],
@@ -159,8 +182,15 @@ export default function Tracker({
     [elevations],
   );
 
-  const typedTooLow = elevation !== null && pctText !== "" && percent < floor;
-  const canSave = elevation !== null && pctText !== "" && percent > floor && !saving;
+  const isDecrease = elevation !== null && pctText !== "" && percent < current;
+  const chosenReason = reasons.find((r) => r.name === reasonChoice) ?? null;
+  const reasonText = isOtherReason(reasonChoice)
+    ? reasonOther.trim()
+      ? `${reasonChoice}: ${reasonOther.trim()}`
+      : ""
+    : reasonChoice;
+  const reasonOk = !isDecrease || reasonText !== "";
+  const canSave = elevation !== null && pctText !== "" && percent !== current && reasonOk && !saving;
 
   async function save() {
     if (!elevation || !canSave) return;
@@ -170,7 +200,17 @@ export default function Tracker({
       const res = await fetch("/api/progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ elevationId: elevation.id, percent }),
+        body: JSON.stringify({
+          elevationId: elevation.id,
+          percent,
+          ...(isDecrease
+            ? {
+                reason: reasonChoice,
+                reasonId: chosenReason?.id || undefined,
+                ...(isOtherReason(reasonChoice) ? { reasonOther: reasonOther.trim() } : {}),
+              }
+            : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Save failed.");
@@ -185,6 +225,8 @@ export default function Tracker({
       await Promise.all([loadProjects(), projectId ? loadBuildings(projectId) : null]).catch(() => {});
       const bldg = typeof data.buildingPercent === "number" ? ` Building overall: ${data.buildingPercent}%.` : "";
       setMessage({ kind: "ok", text: `Saved: ${elevation.name} is now ${percent}%.${bldg}` });
+      setReasonChoice("");
+      setReasonOther("");
     } catch (e) {
       setMessage({ kind: "err", text: e instanceof Error ? e.message : "Save failed." });
     } finally {
@@ -326,11 +368,11 @@ export default function Tracker({
               step={STEP}
               value={percent}
               onChange={(e) => setPct(Number(e.target.value))}
-              disabled={!elevation || floor >= 100}
+              disabled={!elevation}
               aria-label="Completion percent slider"
             />
             <div className="ticks" aria-hidden="true">
-              {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((n) => (
+              {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100].map((n) => (
                 <span key={n} className={n % 20 ? "minor" : ""} style={{ left: `${n}%` }}>
                   {n % 20 ? "" : n}
                 </span>
@@ -344,16 +386,16 @@ export default function Tracker({
               inputMode="numeric"
               autoComplete="off"
               value={pctText}
-              disabled={!elevation || floor >= 100}
+              disabled={!elevation}
               onFocus={(e) => e.currentTarget.select()}
               onChange={(e) => {
-                // digits only, no leading zeros, max 100 (below-current is caught on blur)
+                // digits only, no leading zeros, max 100
                 let raw = e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
                 if (raw !== "" && Number(raw) > 100) raw = "100";
                 setPctText(raw);
-                setPercent(raw === "" ? floor : Number(raw));
+                setPercent(raw === "" ? current : Number(raw));
               }}
-              onBlur={() => setPct(pctText === "" ? floor : percent)}
+              onBlur={() => setPct(pctText === "" ? current : percent)}
               onKeyDown={(e) => {
                 if (e.key === "ArrowUp") {
                   e.preventDefault();
@@ -377,7 +419,7 @@ export default function Tracker({
               <button
                 type="button"
                 aria-label="Decrease 5%"
-                disabled={!elevation || percent <= floor}
+                disabled={!elevation || percent <= 0}
                 onClick={() => setPct(percent - STEP)}
               >
                 ▼
@@ -391,10 +433,39 @@ export default function Tracker({
             {elevation.lastEdited ? ` · ${timeAgo(elevation.lastEdited, now)}` : ""}
           </div>
         )}
-        {typedTooLow && (
-          <div className="msg err">Can&apos;t go below the current {floor}%. Progress only goes up.</div>
+        {isDecrease && (
+          <div className="reason-box">
+            <div className="reason-title">
+              Lowering from {current}% to {percent}%. Why?
+            </div>
+            <div className="reason-list" role="radiogroup" aria-label="Reason for lowering">
+              {reasons.map((r) => (
+                <label key={r.id || r.name} className={`reason-opt${reasonChoice === r.name ? " on" : ""}`}>
+                  <input
+                    type="radio"
+                    name="down-reason"
+                    value={r.name}
+                    checked={reasonChoice === r.name}
+                    onChange={() => setReasonChoice(r.name)}
+                  />
+                  {r.name}
+                </label>
+              ))}
+            </div>
+            {isOtherReason(reasonChoice) && (
+              <input
+                type="text"
+                className="reason-other"
+                placeholder="Describe the reason"
+                maxLength={200}
+                value={reasonOther}
+                onChange={(e) => setReasonOther(e.target.value)}
+                autoFocus
+              />
+            )}
+            {!reasonOk && <div className="hint">Pick a reason to save.</div>}
+          </div>
         )}
-        {elevation && floor >= 100 && <div className="hint">This elevation is already complete.</div>}
 
         <div style={{ marginTop: 16 }}>
           <button className="btn" onClick={save} disabled={!canSave}>

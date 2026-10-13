@@ -33,6 +33,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const { elevationId } = body;
   const percent = Number(body.percent);
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 100) : "";
+  const reasonId = typeof body.reasonId === "string" ? body.reasonId.trim().slice(0, 100) : "";
+  const reasonOther = typeof body.reasonOther === "string" ? body.reasonOther.trim().slice(0, 300) : "";
 
   if (!isNotionId(elevationId)) return NextResponse.json({ error: "Invalid elevation" }, { status: 400 });
   if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
@@ -58,12 +61,14 @@ export async function POST(req: NextRequest) {
     ];
   }
 
-  // Progress can only go up.
+  // Progress can go down, but only with a reason.
   const current = Math.round((readNumber(page, e.percent) ?? 0) * 100);
-  if (percent < current) {
+  const isDecrease = percent < current;
+  const isOther = /other/i.test(reason); // the option whose name contains "Other" needs a typed reason
+  if (isDecrease && (!reason || (isOther && !reasonOther))) {
     return NextResponse.json(
-      { error: `This elevation is already at ${current}%. Progress can't go down.` },
-      { status: 409 },
+      { error: `Lowering from ${current}% to ${percent}% needs a reason.` },
+      { status: 400 },
     );
   }
 
@@ -93,6 +98,12 @@ export async function POST(req: NextRequest) {
         [l.changedBy]: { rich_text: [{ text: { content: session.name } }] },
         [l.changedByEmail]: { email: session.email || null },
         [l.changedAt]: { date: { start: now } },
+        // Reason (Notion Select) + Other Reason (Text, only when "Other" was picked)
+        // Select by option ID when we have it (rename-safe), otherwise by name.
+        ...(isDecrease && l.reason ? { [l.reason]: { select: reasonId ? { id: reasonId } : { name: reason } } } : {}),
+        ...(isDecrease && isOther && l.reasonOther
+          ? { [l.reasonOther]: { rich_text: [{ text: { content: reasonOther } }] } }
+          : {}),
       });
       logged = true;
     } catch (err) {

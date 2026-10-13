@@ -305,3 +305,20 @@ html, body { overflow-x: hidden; overscroll-behavior: none; }
 @media (max-width: 640px) {
   input, select, textarea { font-size: 16px; }
 }
+/* ---------- Lowering a %: reason picker ---------- */
+.reason-box {
+  margin-top: 14px; padding: 12px; border-radius: 10px;
+  border: 1px solid #f0c36d; background: #fff8e6;
+}
+.reason-title { font-weight: 600; margin-bottom: 8px; color: #7a5200; }
+.reason-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.reason-opt {
+  display: flex; align-items: center; gap: 8px; padding: 9px 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  font-size: 14px; cursor: pointer;
+}
+.reason-opt.on { border-color: var(--brand); background: #e8eef6; }
+.reason-opt input { margin: 0; accent-color: var(--brand); }
+.reason-other { margin-top: 8px; }
+.down-flag { color: var(--err); font-weight: 700; }
+@media (max-width: 400px) { .reason-list { grid-template-columns: 1fr; } }

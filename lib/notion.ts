@@ -64,6 +64,12 @@ export async function queryPage(
   return { results: data.results, nextCursor: data.has_more ? data.next_cursor : null };
 }
 
+/** A database's columns (schema), keyed by column name. Each column has its stable `id`. */
+export async function getDatabaseProps(databaseId: string): Promise<Record<string, any>> {
+  const db = await notion(`/databases/${databaseId}`, { method: "GET" });
+  return db.properties ?? {};
+}
+
 export function getPage(pageId: string): Promise<NotionPage> {
   return notion(`/pages/${pageId}`, { method: "GET" });
 }
