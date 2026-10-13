@@ -27,6 +27,7 @@ type Building = {
 type Elevation = {
   id: string;
   name: string;
+  code: string;
   percent: number | null;
   submittedBy: string;
   lastEdited: string | null;
