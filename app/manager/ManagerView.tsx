@@ -20,6 +20,7 @@ type Building = {
   id: string;
   name: string;
   type: string;
+  number: number | null;
   elevationCount: number;
   percent: number | null;
   lastReported: string | null;
@@ -96,7 +97,15 @@ function Progress({ percent }: { percent: number | null }) {
     </span>
   );
 }
+/** "B1" from Bldg #, or the short name if Bldg # is empty. */
+function bldgCode(b: { name: string; number: number | null }): string {
+  return b.number !== null ? `B${b.number}` : shortName(b.name);
+}
 
+/** "Bldg Type 1" → "Type 1"; "Cabana" stays "Cabana". */
+function bldgType(type: string): string {
+  return type.replace(/^bldg\s+/i, "");
+}
 function shortName(name: string): string {
   const parts = name.split(/\s+-\s*|\s*-\s+/).map((s) => s.trim()).filter(Boolean);
   return parts.length > 1 ? parts.slice(1).join(" - ") : name;
@@ -346,7 +355,8 @@ export default function ManagerView({ userName }: { userName: string }) {
                       <button type="button" className="tree-row level-2" onClick={() => toggleBuilding(b.id)}>
                         <span className="caret">{openBuildings.has(b.id) ? "▾" : "▸"}</span>
                         <span className="tree-title" title={b.name}>
-                          <span className="tree-name-text">{shortName(b.name)}</span>
+                          <span className="tree-name-text">{bldgCode(b)}</span>
+                          {b.type && <span className="tag tag-blue">{bldgType(b.type)}</span>}
                           <span className="chip">
                             {b.elevationCount} elevation{b.elevationCount === 1 ? "" : "s"}
                           </span>
@@ -440,7 +450,8 @@ export default function ManagerView({ userName }: { userName: string }) {
                   <option value="">{filters.projectId ? "All buildings" : "Pick a project"}</option>
                   {filterBuildings.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {buildingLabel(b.name)}
+                      {bldgCode(b)}
+                      {b.type ? ` · ${bldgType(b.type)}` : ""}
                     </option>
                   ))}
                 </select>
