@@ -112,6 +112,11 @@ export function readText(page: NotionPage, key: string): string {
   if (parts) return parts.map((t: any) => t.plain_text).join("").trim();
   if (p.type === "email") return p.email ?? "";
   if (p.type === "select") return p.select?.name ?? "";
+  if (p.type === "formula") {
+    const f = p.formula ?? {};
+    if (f.type === "string") return (f.string ?? "").trim();
+    if (f.type === "number" && f.number !== null) return String(f.number);
+  }
   return "";
 }
 

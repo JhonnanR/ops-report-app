@@ -38,10 +38,11 @@ type Reason = { id: string; name: string };
 /** The reason whose name contains "Other" opens a text box. */
 const isOtherReason = (name: string) => /other/i.test(name);
 
-/** "Meridian Forty54 - Cabana - 5" → "Cabana 5" (project name and dashes removed) */
+/** "Merdian Forty 54 - Bldg 1 - 1" → "Bldg 1 - 1" (project name removed, dashes kept) */
 function buildingLabel(name: string): string {
-  const parts = name.split(" - ").map((s) => s.trim()).filter(Boolean);
-  return (parts.length > 1 ? parts.slice(1) : parts).join(" ");
+  // split on dashes with a space on at least one side (handles "Shade Pav. -7")
+  const parts = name.split(/\s+-\s*|\s*-\s+/).map((s) => s.trim()).filter(Boolean);
+  return (parts.length > 1 ? parts.slice(1) : parts).join(" - ");
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -178,7 +179,7 @@ export default function Tracker({
     [buildings],
   );
   const elevationOptions: Option[] = useMemo(
-    () => elevations.map((e) => ({ id: e.id, label: e.name, tag: `Currently ${e.percent ?? 0}%` })),
+    () => elevations.map((e) => ({ id: e.id, label: e.code || e.name, tag: `Currently ${e.percent ?? 0}%` })),
     [elevations],
   );
 
@@ -224,7 +225,7 @@ export default function Tracker({
       // Refresh project % and building % (keeps the current selection).
       await Promise.all([loadProjects(), projectId ? loadBuildings(projectId) : null]).catch(() => {});
       const bldg = typeof data.buildingPercent === "number" ? ` Building overall: ${data.buildingPercent}%.` : "";
-      setMessage({ kind: "ok", text: `Saved: ${elevation.name} is now ${percent}%.${bldg}` });
+      setMessage({ kind: "ok", text: `Saved: ${elevation.code || elevation.name} is now ${percent}%.${bldg}` });
       setReasonChoice("");
       setReasonOther("");
     } catch (e) {

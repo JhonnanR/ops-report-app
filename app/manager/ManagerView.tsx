@@ -8,6 +8,7 @@ import { timeAgo } from "@/lib/timeAgo";
 type Project = {
   id: string;
   name: string;
+  code: string;
   status: string;
   divisions: string[];
   percent: number | null;
@@ -95,15 +96,13 @@ function Progress({ percent }: { percent: number | null }) {
   );
 }
 
-/** "Meridian Forty54 - Cabana - 5" → "Cabana - 5" (the project is already shown above it). */
 function shortName(name: string): string {
-  const parts = name.split(" - ");
+  const parts = name.split(/\s+-\s*|\s*-\s+/).map((s) => s.trim()).filter(Boolean);
   return parts.length > 1 ? parts.slice(1).join(" - ") : name;
 }
 /** "Meridian Forty54 - Cabana - 5" → "Cabana 5" (project name and dashes removed) */
 function buildingLabel(name: string): string {
-  const parts = name.split(" - ").map((s) => s.trim()).filter(Boolean);
-  return (parts.length > 1 ? parts.slice(1) : parts).join(" ");
+  return shortName(name);
 }
 export default function ManagerView({ userName }: { userName: string }) {
   const router = useRouter();
@@ -365,7 +364,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                             <li key={el.id} className="tree-row level-3 static">
                               <span className="caret" />
                               <span className="tree-title">
-                                <span className="tree-name-text">{el.name}</span>
+                                <span className="tree-name-text">{el.code || el.name}</span>
                               </span>
                               <Progress percent={el.percent ?? 0} />
                               <span className="tree-when">
@@ -455,7 +454,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                   <option value="">{filters.buildingId ? "All elevations" : "Pick a building"}</option>
                   {filterElevations.map((el) => (
                     <option key={el.id} value={el.id}>
-                      {el.name}
+                      {el.code || el.name}
                     </option>
                   ))}
                 </select>

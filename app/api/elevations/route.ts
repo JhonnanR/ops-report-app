@@ -22,7 +22,8 @@ export async function GET(req: NextRequest) {
       return {
         id: pg.id,
         name: readText(pg, e.name) || readText(pg, e.code),
-        code: readText(pg, e.code),
+        // "Elevation Code" formula column; falls back to the page title if it's empty
+        code: readText(pg, e.elevCode) || readText(pg, e.code),
         percent: pct === null ? null : Math.round(pct * 100),
         submittedBy: readText(pg, e.submittedBy),
         lastEdited: pg.last_edited_time ?? null,
