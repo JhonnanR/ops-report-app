@@ -326,3 +326,15 @@ html, body { overflow-x: hidden; overscroll-behavior: none; }
 .combo-list li { align-items: center; }
 .combo-label { font-weight: 600; min-width: 36px; }
 .combo-middle { flex: 1; text-align: center; color: var(--muted); font-size: 14px; }
+/* ---------- Dropdowns: blue type bubble + % bubble ---------- */
+.combo-list li { align-items: center; }
+.combo-label { font-weight: 600; min-width: 36px; }
+.combo-middle { flex: 1; display: flex; justify-content: center; }
+.tag-blue { background: #3d86cf; color: #fff; }
+
+/* bubbles inside the field after picking (type + %) */
+.combo-tags {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  display: flex; gap: 6px; pointer-events: none;
+}
+.combo.has-tag2 input { padding-right: 200px; }

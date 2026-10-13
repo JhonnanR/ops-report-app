@@ -4,8 +4,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 export type Option = { id: string; label: string; middle?: string; tag?: string };
 
-/** Text shown in the field once an option is picked, e.g. "B1 · Type 1". */
-const textOf = (o: Option) => (o.middle ? `${o.label} · ${o.middle}` : o.label);
+/** Text typed/shown in the field once an option is picked (the middle + tag show as bubbles). */
+const textOf = (o: Option) => o.label;
 
 type Props = {
   options: Option[];
@@ -18,7 +18,7 @@ type Props = {
   searchable?: boolean;
 };
 
-/** Dropdown with an optional tag on the right (e.g. "40% completed"). Touch + keyboard friendly. */
+/** Dropdown with optional bubbles: a blue one in the middle (e.g. "Type 1") and a % one on the right. */
 export default function SearchSelect({
   options,
   value,
@@ -92,7 +92,12 @@ export default function SearchSelect({
   }
 
   return (
-    <div className={`combo${searchable ? "" : " plain"}${selected?.tag ? " has-tag" : ""}`} ref={wrapRef}>
+    <div
+      className={`combo${searchable ? "" : " plain"}${selected?.tag ? " has-tag" : ""}${
+        selected?.middle && selected?.tag ? " has-tag2" : ""
+      }`}
+      ref={wrapRef}
+    >
       <input
         type="text"
         role="combobox"
@@ -120,8 +125,13 @@ export default function SearchSelect({
         }}
         onKeyDown={onKey}
       />
-      {/* The selected option's tag shows inside the field, on the right */}
-      {selected?.tag && !disabled && <span className="tag combo-tag">{selected.tag}</span>}
+      {/* The selected option's bubbles show inside the field, on the right */}
+      {selected && (selected.middle || selected.tag) && !disabled && (
+        <span className="combo-tags">
+          {selected.middle && <span className="tag tag-blue">{selected.middle}</span>}
+          {selected.tag && <span className="tag">{selected.tag}</span>}
+        </span>
+      )}
       {open && !disabled && (
         <ul className="combo-list" id={listId} role="listbox">
           {filtered.length === 0 && <li className="combo-empty">{emptyText}</li>}
@@ -137,7 +147,11 @@ export default function SearchSelect({
               }}
             >
               <span className="combo-label">{o.label}</span>
-              {o.middle && <span className="combo-middle">{o.middle}</span>}
+              {o.middle && (
+                <span className="combo-middle">
+                  <span className="tag tag-blue">{o.middle}</span>
+                </span>
+              )}
               {o.tag && <span className="tag">{o.tag}</span>}
             </li>
           ))}
