@@ -295,7 +295,9 @@ input:disabled, select:disabled { background: #eef1f5; color: var(--muted); }
 }
 
 /* ---------- Phone: fixed, steady view ---------- */
-html, body { overflow-x: hidden; overscroll-behavior: none; }
+/* stop side-to-side wobble without breaking normal up/down scrolling */
+html, body { overflow-x: clip; }
+body { min-height: 100%; -webkit-overflow-scrolling: touch; }
 
 /* Dragging the slider only moves the slider, never the page */
 .range-wrap input[type="range"] { touch-action: none; }
@@ -338,3 +340,47 @@ html, body { overflow-x: hidden; overscroll-behavior: none; }
   display: flex; gap: 6px; pointer-events: none;
 }
 .combo.has-tag2 input { padding-right: 200px; }
+   /* Quiet type label in the Manager view (light tint) */
+   .tag-soft { background: #eaf2fb; color: #3d6f9e; font-weight: 500; border: 0; }
+/* ---------- Photos on the Report page (full-width previews) ---------- */
+.photos { margin-top: 14px; }
+.photos-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.photos-title { font-weight: 600; font-size: 14px; }
+.photo-row { display: flex; flex-direction: column; gap: 10px; }
+
+/* each photo: full row width, whole image shown (no cropping) */
+.photo-thumb {
+  position: relative; width: 100%; border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--border); background: #eef1f5;
+}
+.photo-thumb img { width: 100%; height: auto; max-height: 70vh; object-fit: contain; display: block; }
+.photo-thumb button {
+  position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; padding: 0;
+  border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.6); color: #fff;
+  font-size: 20px; line-height: 32px; cursor: pointer;
+}
+
+/* add button: full-width bar */
+.photo-add {
+  width: 100%; min-height: 56px; border: 1.5px dashed #9fb3c8; border-radius: 12px;
+  background: #f7f9fc; color: var(--brand); cursor: pointer;
+  display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px;
+}
+.photo-add input { display: none; }
+.photo-add span { font-size: 22px; line-height: 1; }
+.photo-add small { font-size: 14px; font-weight: 600; }
+.photo-add.busy { opacity: 0.6; }
+
+/* ---------- Photos in Manager view → History (bigger thumbnails) ---------- */
+.history-photos { display: flex; gap: 6px; flex-wrap: wrap; }
+.history-photos img {
+  width: 96px; height: 96px; object-fit: cover; display: block;
+  border-radius: 8px; border: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .history-photos img { width: 72px; height: 72px; }
+}
+.photo-max {
+  text-align: center; font-size: 13px; color: var(--muted);
+  padding: 10px; border: 1px dashed var(--border); border-radius: 12px;
+}

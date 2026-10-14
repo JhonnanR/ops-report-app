@@ -33,14 +33,39 @@ type Elevation = {
 };
 
 const STEP = 5;
+const MAX_PHOTOS = 3;
+
+type Photo = { key: string; blob: Blob; preview: string };
+
+/** Shrink a phone photo before uploading (max 1600px, JPEG ~80%) so it uploads fast on site. */
+async function compressImage(file: File, maxSide = 1600, quality = 0.8): Promise<Blob> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("Could not read that photo."));
+      i.src = url;
+    });
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (!blob) throw new Error("Could not process that photo.");
+    return blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 type Reason = { id: string; name: string };
 /** The reason whose name contains "Other" opens a text box. */
 const isOtherReason = (name: string) => /other/i.test(name);
 
-/** "Merdian Forty 54 - Bldg 1 - 1" → "Bldg 1 - 1" (project name removed, dashes kept) */
+/** "Merdian Forty 54 - Bldg 1 - 1" → "Bldg 1 - 1" (used only if Bldg # is empty) */
 function buildingLabel(name: string): string {
-  // split on dashes with a space on at least one side (handles "Shade Pav. -7")
   const parts = name.split(/\s+-\s*|\s*-\s+/).map((s) => s.trim()).filter(Boolean);
   return (parts.length > 1 ? parts.slice(1) : parts).join(" - ");
 }
@@ -99,6 +124,44 @@ export default function Tracker({
   const [reasonChoice, setReasonChoice] = useState(""); // option name
   const [reasonOther, setReasonOther] = useState("");
 
+  // Photos for this save (required, up to 3)
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [photoBusy, setPhotoBusy] = useState(false);
+
+  function clearPhotos() {
+    setPhotos((list) => {
+      list.forEach((p) => URL.revokeObjectURL(p.preview));
+      return [];
+    });
+  }
+
+  async function addPhotos(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setPhotoBusy(true);
+    try {
+      const room = MAX_PHOTOS - photos.length;
+      const picked = Array.from(files).slice(0, Math.max(0, room));
+      const added: Photo[] = [];
+      for (const f of picked) {
+        const blob = await compressImage(f);
+        added.push({ key: `${Date.now()}-${Math.random()}`, blob, preview: URL.createObjectURL(blob) });
+      }
+      setPhotos((list) => [...list, ...added].slice(0, MAX_PHOTOS));
+    } catch (e) {
+      setMessage({ kind: "err", text: e instanceof Error ? e.message : "Could not add that photo." });
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  function removePhoto(key: string) {
+    setPhotos((list) => {
+      const p = list.find((x) => x.key === key);
+      if (p) URL.revokeObjectURL(p.preview);
+      return list.filter((x) => x.key !== key);
+    });
+  }
+
   useEffect(() => {
     getJson<{ reasons: Reason[] }>("/api/reasons")
       .then((d) => setReasons(d.reasons))
@@ -151,13 +214,14 @@ export default function Tracker({
       .finally(() => setLoading(null));
   }, [buildingId]);
 
-  // Start at the elevation's current value, with no reason picked.
+  // Start at the elevation's current value, with no reason or photos picked.
   useEffect(() => {
     const start = elevation?.percent ?? 0;
     setPercent(start);
     setPctText(String(start));
     setReasonChoice("");
     setReasonOther("");
+    clearPhotos();
   }, [elevation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const projectOptions: Option[] = useMemo(
@@ -193,19 +257,35 @@ export default function Tracker({
       : ""
     : reasonChoice;
   const reasonOk = !isDecrease || reasonText !== "";
-  const canSave = elevation !== null && pctText !== "" && percent !== current && reasonOk && !saving;
+  const photosOk = photos.length > 0;
+  const canSave =
+    elevation !== null && pctText !== "" && percent !== current && reasonOk && photosOk && !saving && !photoBusy;
 
   async function save() {
     if (!elevation || !canSave) return;
     setSaving(true);
     setMessage(null);
     try {
+      // 1. Upload the photos to Notion (one request each)
+      const photoIds = await Promise.all(
+        photos.map(async (p, i) => {
+          const form = new FormData();
+          form.append("file", p.blob, `photo-${i + 1}.jpg`);
+          const up = await fetch("/api/upload", { method: "POST", body: form });
+          const d = await up.json().catch(() => ({}));
+          if (!up.ok || !d.id) throw new Error(d.error || "Photo upload failed.");
+          return d.id as string;
+        }),
+      );
+
+      // 2. Save the progress with the photos attached
       const res = await fetch("/api/progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           elevationId: elevation.id,
           percent,
+          photoIds,
           ...(isDecrease
             ? {
                 reason: reasonChoice,
@@ -230,6 +310,7 @@ export default function Tracker({
       setMessage({ kind: "ok", text: `Saved: ${elevation.code || elevation.name} is now ${percent}%.${bldg}` });
       setReasonChoice("");
       setReasonOther("");
+      clearPhotos();
     } catch (e) {
       setMessage({ kind: "err", text: e instanceof Error ? e.message : "Save failed." });
     } finally {
@@ -470,9 +551,48 @@ export default function Tracker({
           </div>
         )}
 
+        {elevation && (
+          <div className="photos">
+            <div className="photos-head">
+              <span className="photos-title">Photos</span>
+            </div>
+            <div className="photo-row">
+              {photos.map((p) => (
+                <div key={p.key} className="photo-thumb">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.preview} alt="" />
+                  <button type="button" aria-label="Remove photo" onClick={() => removePhoto(p.key)}>
+                    ×
+                  </button>
+                </div>
+              ))}
+              {photos.length < MAX_PHOTOS && (
+                <label className={`photo-add${photoBusy ? " busy" : ""}`}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      addPhotos(e.target.files);
+                      e.target.value = "";
+                    }}
+                    disabled={photoBusy || saving}
+                  />
+                  <span>{photoBusy ? "…" : "📷"}</span>
+                  <small>{photoBusy ? "Adding" : "Add photo"}</small>
+                </label>
+              )}
+              {photos.length >= MAX_PHOTOS && (
+                <div className="photo-max">Max {MAX_PHOTOS} photos added</div>
+              )}
+            </div>
+            {!photosOk && percent !== current && <div className="hint">Add at least one photo to save.</div>}
+          </div>
+        )}
+
         <div style={{ marginTop: 16 }}>
           <button className="btn" onClick={save} disabled={!canSave}>
-            {saving ? "Saving…" : "Save progress"}
+            {saving ? (photos.length ? "Uploading photos…" : "Saving…") : "Save progress"}
           </button>
         </div>
         {message && <div className={`msg ${message.kind}`}>{message.text}</div>}

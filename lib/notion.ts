@@ -83,6 +83,27 @@ export function createPage(databaseId: string, properties: Record<string, unknow
   return notion(`/pages`, { method: "POST", body: { parent: { database_id: databaseId }, properties } });
 }
 
+/**
+ * Upload one file to Notion (Direct Upload, up to 20 MB on paid plans / 5 MB on free).
+ * Returns the file_upload ID, which must be attached to a page within 1 hour.
+ */
+export async function uploadFile(file: Blob, filename: string): Promise<string> {
+  const created = await notion(`/file_uploads`, {
+    method: "POST",
+    body: { filename, content_type: file.type || "image/jpeg" },
+  });
+  const form = new FormData();
+  form.append("file", file, filename);
+  const res = await fetch(`${NOTION_API}/file_uploads/${created.id}/send`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.notionToken}`, "Notion-Version": NOTION_VERSION },
+    body: form,
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Notion file upload failed (${res.status}): ${await res.text()}`);
+  return created.id as string;
+}
+
 /* ---------- property readers ---------- */
 
 function sameId(a: string, b: string): boolean {
@@ -128,6 +149,15 @@ export function readNumber(page: NotionPage, key: string): number | null {
 export function readDate(page: NotionPage, key: string): string | null {
   const p = findProp(page, key);
   return p?.type === "date" ? (p.date?.start ?? null) : null;
+}
+
+/** Files & media column → list of { name, url }. Notion file links expire after ~1 hour. */
+export function readFiles(page: NotionPage, key: string): { name: string; url: string }[] {
+  const p = findProp(page, key);
+  if (p?.type !== "files") return [];
+  return (p.files ?? [])
+    .map((f: any) => ({ name: f.name ?? "", url: f.file?.url ?? f.external?.url ?? "" }))
+    .filter((f: { url: string }) => f.url);
 }
 
 export function readRelationIds(page: NotionPage, key: string): string[] {

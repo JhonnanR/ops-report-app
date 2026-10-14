@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getManagerSession } from "@/lib/access";
 import { config, props } from "@/lib/config";
-import { isNotionId, queryAll, queryPage, readDate, readNumber, readRelationIds, readText } from "@/lib/notion";
+import { isNotionId, queryAll, queryPage, readDate, readFiles, readNumber, readRelationIds, readText } from "@/lib/notion";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
       const other = l.reasonOther ? readText(pg, l.reasonOther) : "";
       return other ? `${choice || "Other"}: ${other}` : choice;
     })(),
+    photos: l.photos ? readFiles(pg, l.photos).map((f) => f.url) : [],
   }));
 
   return NextResponse.json({ history, nextCursor, enabled: true });

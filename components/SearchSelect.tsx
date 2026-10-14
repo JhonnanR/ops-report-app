@@ -128,7 +128,7 @@ export default function SearchSelect({
       {/* The selected option's bubbles show inside the field, on the right */}
       {selected && (selected.middle || selected.tag) && !disabled && (
         <span className="combo-tags">
-          {selected.middle && <span className="tag tag-blue">{selected.middle}</span>}
+          {selected.middle && <span className="tag tag-soft">{selected.middle}</span>}
           {selected.tag && <span className="tag">{selected.tag}</span>}
         </span>
       )}
@@ -149,7 +149,7 @@ export default function SearchSelect({
               <span className="combo-label">{o.label}</span>
               {o.middle && (
                 <span className="combo-middle">
-                  <span className="tag tag-blue">{o.middle}</span>
+                  <span className="tag tag-soft">{o.middle}</span>
                 </span>
               )}
               {o.tag && <span className="tag">{o.tag}</span>}

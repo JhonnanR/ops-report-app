@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
   const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 100) : "";
   const reasonId = typeof body.reasonId === "string" ? body.reasonId.trim().slice(0, 100) : "";
   const reasonOther = typeof body.reasonOther === "string" ? body.reasonOther.trim().slice(0, 300) : "";
+  // Photo upload IDs from /api/upload (1–3 required when the log has a Photos column)
+  const photoIds: string[] = Array.isArray(body.photoIds)
+    ? body.photoIds.filter((x: unknown): x is string => typeof x === "string" && /^[0-9a-f-]{32,36}$/i.test(x)).slice(0, 3)
+    : [];
 
   if (!isNotionId(elevationId)) return NextResponse.json({ error: "Invalid elevation" }, { status: 400 });
   if (!Number.isInteger(percent) || percent < 0 || percent > 100) {
@@ -44,6 +48,12 @@ export async function POST(req: NextRequest) {
 
   const e = props.elevations;
   const b = props.buildings;
+
+  // A photo is required with every save (only enforced once the Photos column is set up).
+  const photosEnabled = Boolean(config.logDb && props.log.photos);
+  if (photosEnabled && photoIds.length === 0) {
+    return NextResponse.json({ error: "Add at least one photo before saving." }, { status: 400 });
+  }
 
   // Make sure the page really is an elevation, and find its building + project.
   const page = await getPage(elevationId);
@@ -103,6 +113,18 @@ export async function POST(req: NextRequest) {
         ...(isDecrease && l.reason ? { [l.reason]: { select: reasonId ? { id: reasonId } : { name: reason } } } : {}),
         ...(isDecrease && isOther && l.reasonOther
           ? { [l.reasonOther]: { rich_text: [{ text: { content: reasonOther } }] } }
+          : {}),
+        // Photos (Notion "Files & media" column)
+        ...(photosEnabled && photoIds.length
+          ? {
+              [l.photos]: {
+                files: photoIds.map((id, i) => ({
+                  type: "file_upload",
+                  file_upload: { id },
+                  name: `photo-${i + 1}.jpg`,
+                })),
+              },
+            }
           : {}),
       });
       logged = true;

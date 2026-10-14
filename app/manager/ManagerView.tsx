@@ -42,6 +42,7 @@ type HistoryRow = {
   by: string;
   at: string | null;
   reason: string;
+  photos: string[];
 };
 type Filters = {
   supervisor: string;
@@ -356,7 +357,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                         <span className="caret">{openBuildings.has(b.id) ? "▾" : "▸"}</span>
                         <span className="tree-title" title={b.name}>
                           <span className="tree-name-text">{bldgCode(b)}</span>
-                          {b.type && <span className="tag tag-blue">{bldgType(b.type)}</span>}
+                          {b.type && <span className="tag tag-soft">{bldgType(b.type)}</span>}
                           <span className="chip">
                             {b.elevationCount} elevation{b.elevationCount === 1 ? "" : "s"}
                           </span>
@@ -491,6 +492,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                       <th>Elevation</th>
                       <th>Change</th>
                       <th>By</th>
+                      <th>Photos</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -509,6 +511,18 @@ export default function ManagerView({ userName }: { userName: string }) {
                           {h.reason && <div className="tree-sub">{h.reason}</div>}
                         </td>
                         <td>{h.by}</td>
+                        <td>
+                          {h.photos.length > 0 && (
+                            <div className="history-photos">
+                              {h.photos.map((url, i) => (
+                                <a key={i} href={url} target="_blank" rel="noreferrer" title="Open photo">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={url} alt={`Photo ${i + 1}`} loading="lazy" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
