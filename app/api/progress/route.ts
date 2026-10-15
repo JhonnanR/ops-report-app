@@ -82,12 +82,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 1. Save the elevation.
+  // 1. Save the elevation (and replace its Latest Photo with this save's photos).
   await updatePage(elevationId, {
     [e.percent]: { number: percent / 100 },
     [e.completed]: { checkbox: percent === 100 },
     [e.submittedBy]: { rich_text: [{ text: { content: session.name } }] },
     [e.submitterEmail]: { email: session.email || null },
+    ...(e.latestPhoto && photoIds.length
+      ? {
+          [e.latestPhoto]: {
+            files: photoIds.map((id, i) => ({
+              type: "file_upload",
+              file_upload: { id },
+              name: `latest-${i + 1}.jpg`,
+            })),
+          },
+        }
+      : {}),
   });
 
   const now = new Date().toISOString();
