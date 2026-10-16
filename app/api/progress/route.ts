@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 100) : "";
   const reasonId = typeof body.reasonId === "string" ? body.reasonId.trim().slice(0, 100) : "";
   const reasonOther = typeof body.reasonOther === "string" ? body.reasonOther.trim().slice(0, 300) : "";
-  // Photo upload IDs from /api/upload (1–3 required when the log has a Photos column)
+  // Photo upload IDs from /api/upload (optional, up to 3)
   const photoIds: string[] = Array.isArray(body.photoIds)
     ? body.photoIds.filter((x: unknown): x is string => typeof x === "string" && /^[0-9a-f-]{32,36}$/i.test(x)).slice(0, 3)
     : [];
@@ -113,6 +113,7 @@ export async function POST(req: NextRequest) {
 
       await createPage(config.logDb, {
         [l.title]: { title: [{ text: { content: `${elevationName} - Rep ${repNo}` } }] },
+        ...(l.reportNo ? { [l.reportNo]: { number: repNo } } : {}),
         [l.elevation]: { relation: [{ id: elevationId }] },
         [l.building]: { relation: buildingIds.map((id) => ({ id })) },
         [l.project]: { relation: projectIds.map((id) => ({ id })) },
