@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
   const pct = (n: number | null) => (n === null ? null : Math.round(n * 100));
   const history = results.map((pg) => ({
     id: pg.id,
-    elevation: readText(pg, l.title),
+    elevation: readText(pg, l.title).replace(/\s-\sRep\s\d+$/, ""), // drop " - Rep #" for display
     projectId: readRelationIds(pg, l.project)[0] ?? null,
     from: pct(readNumber(pg, l.from)),
     to: pct(readNumber(pg, l.to)),

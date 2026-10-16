@@ -259,7 +259,7 @@ export default function Tracker({
   const reasonOk = !isDecrease || reasonText !== "";
   const photosOk = photos.length > 0;
   const canSave =
-    elevation !== null && pctText !== "" && percent !== current && reasonOk && photosOk && !saving && !photoBusy;
+    elevation !== null && pctText !== "" && percent !== current && reasonOk && !saving && !photoBusy;
 
   async function save() {
     if (!elevation || !canSave) return;
@@ -586,7 +586,7 @@ export default function Tracker({
                 <div className="photo-max">Max {MAX_PHOTOS} photos added</div>
               )}
             </div>
-            {!photosOk && percent !== current && <div className="hint">Add at least one photo to save.</div>}
+            {!photosOk && percent !== current && <div className="hint">A photo is recommended with each report.</div>}
           </div>
         )}
 

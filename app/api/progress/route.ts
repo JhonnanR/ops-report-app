@@ -49,11 +49,7 @@ export async function POST(req: NextRequest) {
   const e = props.elevations;
   const b = props.buildings;
 
-  // A photo is required with every save (only enforced once the Photos column is set up).
-  const photosEnabled = Boolean(config.logDb && props.log.photos);
-  if (photosEnabled && photoIds.length === 0) {
-    return NextResponse.json({ error: "Add at least one photo before saving." }, { status: 400 });
-  }
+  const photosEnabled = Boolean(config.logDb && props.log.photos); // photos are optional
 
   // Make sure the page really is an elevation, and find its building + project.
   const page = await getPage(elevationId);
@@ -109,8 +105,14 @@ export async function POST(req: NextRequest) {
     const l = props.log;
     const elevationName = readText(page, e.code) || readText(page, e.name) || "Elevation";
     try {
+      // Report number for this elevation: existing reports + 1 → "… - Rep 3"
+      const prior = await queryAll(config.logDb, {
+        filter: { property: l.elevation, relation: { contains: elevationId } },
+      });
+      const repNo = prior.length + 1;
+
       await createPage(config.logDb, {
-        [l.title]: { title: [{ text: { content: elevationName } }] },
+        [l.title]: { title: [{ text: { content: `${elevationName} - Rep ${repNo}` } }] },
         [l.elevation]: { relation: [{ id: elevationId }] },
         [l.building]: { relation: buildingIds.map((id) => ({ id })) },
         [l.project]: { relation: projectIds.map((id) => ({ id })) },
