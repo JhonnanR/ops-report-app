@@ -40,11 +40,12 @@ export default function PickList({
     return (
       <button
         type="button"
-        className="pick-selected"
+        className={`pick-selected${selected.done ? " done" : ""}`}
         onClick={() => setOpen(true)}
         aria-label="Change selection"
       >
         <span className="pick-label">{selected.label}</span>
+        {selected.done && <span className="done-mark">✓ Done today</span>}
         <span className="pick-bubbles">
           {selected.middle && <span className="tag tag-soft">{selected.middle}</span>}
           {selected.tag && <span className="tag">{selected.tag}</span>}
@@ -64,13 +65,14 @@ export default function PickList({
             type="button"
             role="option"
             aria-selected={o.id === value}
-            className={`pick-row${o.id === value ? " on" : ""}`}
+            className={`pick-row${o.id === value ? " on" : ""}${o.done ? " done" : ""}`}
             onClick={() => {
               onChange(o.id);
               setOpen(false);
             }}
           >
             <span className="pick-label">{o.label}</span>
+            {o.done && <span className="done-mark">✓</span>}
             {o.middle && (
               <span className="pick-middle">
                 <span className="tag tag-soft">{o.middle}</span>

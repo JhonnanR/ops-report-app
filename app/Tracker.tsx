@@ -61,6 +61,29 @@ async function compressImage(file: File, maxSide = 1600, quality = 0.8): Promise
   }
 }
 
+type TodayReport = {
+  id: string;
+  elevationId: string | null;
+  elevation: string;
+  from: number | null;
+  to: number | null;
+  at: string | null;
+};
+
+/** Page IDs sometimes come with dashes, sometimes without. */
+const norm = (id: string) => id.replace(/-/g, "");
+
+/** Local midnight today, as ISO (the "session" resets each day). */
+function startOfToday(nowMs: number): string {
+  const d = new Date(nowMs);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+/** "2:35 PM" */
+const timeOf = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "";
+
 type Reason = { id: string; name: string };
 /** The reason whose name contains "Other" opens a text box. */
 const isOtherReason = (name: string) => /other/i.test(name);
@@ -116,6 +139,42 @@ export default function Tracker({
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
+
+  // Today's reports by this supervisor (resets at local midnight).
+  const [today, setToday] = useState<TodayReport[]>([]);
+  const dayKey = new Date(now).toDateString(); // changes at midnight → reload
+  const loadToday = useCallback(async () => {
+    const d = await getJson<{ reports: TodayReport[] }>(
+      `/api/today?since=${encodeURIComponent(startOfToday(Date.now()))}`,
+    );
+    setToday(d.reports);
+  }, []);
+  useEffect(() => {
+    loadToday().catch(() => {});
+  }, [dayKey, loadToday]);
+
+  // Elevations reported today → darkened in the list. Bottom list groups by elevation.
+  const doneToday = useMemo(
+    () => new Set(today.map((r) => (r.elevationId ? norm(r.elevationId) : "")).filter(Boolean)),
+    [today],
+  );
+  const todayByElevation = useMemo(() => {
+    const map = new Map<
+      string,
+      { name: string; from: number | null; to: number | null; at: string | null; count: number }
+    >();
+    // reports are newest first: first seen = latest "to"/time, last seen = earliest "from"
+    for (const r of today) {
+      const key = r.elevationId ? norm(r.elevationId) : r.id;
+      const cur = map.get(key);
+      if (!cur) map.set(key, { name: r.elevation, from: r.from, to: r.to, at: r.at, count: 1 });
+      else {
+        cur.from = r.from;
+        cur.count += 1;
+      }
+    }
+    return Array.from(map.values());
+  }, [today]);
 
   // Each step appears only after the one before it is done; scroll it into view on phones.
   const buildingCard = useRef<HTMLDivElement>(null);
@@ -265,8 +324,14 @@ export default function Tracker({
     [buildings],
   );
   const elevationOptions: Option[] = useMemo(
-    () => elevations.map((e) => ({ id: e.id, label: e.code || e.name, tag: `Currently ${e.percent ?? 0}%` })),
-    [elevations],
+    () =>
+      elevations.map((e) => ({
+        id: e.id,
+        label: e.code || e.name,
+        tag: `Currently ${e.percent ?? 0}%`,
+        done: doneToday.has(norm(e.id)),
+      })),
+    [elevations, doneToday],
   );
 
   const isDecrease = elevation !== null && pctText !== "" && percent < current;
@@ -325,7 +390,9 @@ export default function Tracker({
         ),
       );
       // Refresh project % and building % (keeps the current selection).
-      await Promise.all([loadProjects(), projectId ? loadBuildings(projectId) : null]).catch(() => {});
+      await Promise.all([loadProjects(), projectId ? loadBuildings(projectId) : null, loadToday()]).catch(
+        () => {},
+      );
       const bldg =
         typeof data.buildingPercent === "number" ? ` Building overall: ${data.buildingPercent}%.` : "";
       setMessage({
@@ -610,6 +677,29 @@ export default function Tracker({
             </button>
           </div>
           {message && <div className={`msg ${message.kind}`}>{message.text}</div>}
+        </div>
+      )}
+
+      {todayByElevation.length > 0 && (
+        <div className="card today">
+          <div className="today-head">
+            <span className="today-title">Today</span>
+            <span className="chip">
+              {todayByElevation.length} elevation{todayByElevation.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <ul className="today-list">
+            {todayByElevation.map((t, i) => (
+              <li key={i}>
+                <span className="today-name">✓ {t.name}</span>
+                <span className="today-change">
+                  {t.from ?? 0}% → <strong>{t.to ?? 0}%</strong>
+                  {t.count > 1 ? ` (${t.count} reports)` : ""}
+                </span>
+                <span className="today-time">{timeOf(t.at)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </main>

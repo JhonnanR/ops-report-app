@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-export type Option = { id: string; label: string; middle?: string; tag?: string };
+export type Option = { id: string; label: string; middle?: string; tag?: string; done?: boolean };
 
 /** Text typed/shown in the field once an option is picked (the middle + tag show as bubbles). */
 const textOf = (o: Option) => o.label;
