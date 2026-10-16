@@ -384,3 +384,31 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
   text-align: center; font-size: 13px; color: var(--muted);
   padding: 10px; border: 1px dashed var(--border); border-radius: 12px;
 }
+/* ---------- Building / Elevation: open list until picked ---------- */
+.pick-list {
+  list-style: none; margin: 0; padding: 0;
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff;
+}
+.pick-list li + li { border-top: 1px solid var(--border); }
+.pick-row {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 12px; background: none; border: 0; font: inherit; color: inherit;
+  text-align: left; cursor: pointer;
+}
+.pick-row:hover, .pick-row.on { background: #e8eef6; }
+.pick-row .pick-label { font-weight: 600; min-width: 36px; }
+.pick-middle { flex: 1; display: flex; justify-content: center; }
+.pick-row .tag { margin-left: auto; }
+
+/* after picking: one field with the choice + bubbles (tap to change) */
+.pick-selected {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: #fff; font: inherit; font-size: 16px; color: inherit; text-align: left; cursor: pointer;
+}
+.pick-selected .pick-label {
+  flex: 1; min-width: 0; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pick-bubbles { display: flex; gap: 6px; flex: none; }
+.pick-chevron { color: var(--muted); font-size: 12px; flex: none; }

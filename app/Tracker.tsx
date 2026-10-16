@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import PickList from "@/components/PickList";
 import SearchSelect, { type Option } from "@/components/SearchSelect";
 import { timeAgo } from "@/lib/timeAgo";
 
@@ -66,7 +67,10 @@ const isOtherReason = (name: string) => /other/i.test(name);
 
 /** "Merdian Forty 54 - Bldg 1 - 1" → "Bldg 1 - 1" (used only if Bldg # is empty) */
 function buildingLabel(name: string): string {
-  const parts = name.split(/\s+-\s*|\s*-\s+/).map((s) => s.trim()).filter(Boolean);
+  const parts = name
+    .split(/\s+-\s*|\s*-\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   return (parts.length > 1 ? parts.slice(1) : parts).join(" - ");
 }
 
@@ -113,6 +117,22 @@ export default function Tracker({
     return () => clearInterval(t);
   }, []);
 
+  // Each step appears only after the one before it is done; scroll it into view on phones.
+  const buildingCard = useRef<HTMLDivElement>(null);
+  const elevationCard = useRef<HTMLDivElement>(null);
+  const completionCard = useRef<HTMLDivElement>(null);
+  const reveal = (el: HTMLDivElement | null) =>
+    setTimeout(() => el?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  useEffect(() => {
+    if (projectId) reveal(buildingCard.current);
+  }, [projectId]);
+  useEffect(() => {
+    if (buildingId) reveal(elevationCard.current);
+  }, [buildingId]);
+  useEffect(() => {
+    if (elevationId) reveal(completionCard.current);
+  }, [elevationId]);
+
   const elevation = elevations.find((e) => e.id === elevationId) ?? null;
   const building = buildings.find((b) => b.id === buildingId) ?? null;
   const project = projects.find((p) => p.id === projectId) ?? null;
@@ -124,7 +144,7 @@ export default function Tracker({
   const [reasonChoice, setReasonChoice] = useState(""); // option name
   const [reasonOther, setReasonOther] = useState("");
 
-  // Photos for this save (required, up to 3)
+  // Photos for this save (optional, up to 3)
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [photoBusy, setPhotoBusy] = useState(false);
 
@@ -214,7 +234,7 @@ export default function Tracker({
       .finally(() => setLoading(null));
   }, [buildingId]);
 
-  // Start at the elevation's current value, with no reason or photos picked.
+  // Start at the elevation's current value, with no reason picked.
   useEffect(() => {
     const start = elevation?.percent ?? 0;
     setPercent(start);
@@ -306,8 +326,12 @@ export default function Tracker({
       );
       // Refresh project % and building % (keeps the current selection).
       await Promise.all([loadProjects(), projectId ? loadBuildings(projectId) : null]).catch(() => {});
-      const bldg = typeof data.buildingPercent === "number" ? ` Building overall: ${data.buildingPercent}%.` : "";
-      setMessage({ kind: "ok", text: `Saved: ${elevation.code || elevation.name} is now ${percent}%.${bldg}` });
+      const bldg =
+        typeof data.buildingPercent === "number" ? ` Building overall: ${data.buildingPercent}%.` : "";
+      setMessage({
+        kind: "ok",
+        text: `Saved: ${elevation.code || elevation.name} is now ${percent}%.${bldg}`,
+      });
       setReasonChoice("");
       setReasonOther("");
       clearPhotos();
@@ -373,230 +397,221 @@ export default function Tracker({
         )}
       </div>
 
-      <div className="card">
-        <label className="field">
-          <span className="step">2</span>Building
-        </label>
-        <SearchSelect
-          key={projectId ?? "none"}
-          options={buildingOptions}
-          value={buildingId}
-          onChange={(id) => {
-            setMessage(null);
-            setBuildingId(id);
-          }}
-          placeholder={
-            !projectId
-              ? "Pick a project first"
-              : loading === "buildings"
-                ? "Loading buildings…"
-                : buildings.length === 0
-                  ? "No buildings linked to this project"
-                  : "Search buildings"
-          }
-          disabled={!projectId || loading === "buildings" || buildings.length === 0}
-          emptyText="No building matches"
-        />
-        {building && (
-          <div className="hint">
-            {building.sqCount > 0 && building.sqCount < building.elevationCount
-              ? `${building.sqCount} of ${building.elevationCount} elevations have SQ`
-              : `${building.elevationCount} elevation${building.elevationCount === 1 ? "" : "s"}`}
-          </div>
-        )}
-      </div>
-
-      <div className="card">
-        <label className="field">
-          <span className="step">3</span>Elevation
-        </label>
-        <SearchSelect
-          key={buildingId ?? "none"}
-          searchable={false}
-          options={elevationOptions}
-          value={elevationId || null}
-          onChange={(id) => {
-            setMessage(null);
-            setElevationId(id ?? "");
-          }}
-          placeholder={
-            !buildingId
-              ? "Pick a building first"
-              : loading === "elevations"
-                ? "Loading elevations…"
-                : elevations.length === 0
-                  ? "No elevations for this building"
-                  : "Choose an elevation"
-          }
-          disabled={!buildingId || loading === "elevations" || elevations.length === 0}
-          emptyText="No elevations"
-        />
-        {elevation && (elevation.submittedBy || elevation.lastEdited) && (
-          <div className="hint">
-            {elevation.submittedBy ? `Last reported by ${elevation.submittedBy}` : "Last edited"}
-            {elevation.lastEdited ? ` · ${timeAgo(elevation.lastEdited, now)}` : ""}
-          </div>
-        )}
-      </div>
-
-      <div className="card">
-        <label className="field" htmlFor="pct">
-          <span className="step">4</span>Completion
-        </label>
-        <div className="pct-row">
-          <div className="range-wrap">
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={STEP}
-              value={percent}
-              onChange={(e) => setPct(Number(e.target.value))}
-              disabled={!elevation}
-              aria-label="Completion percent slider"
-            />
-            <div className="ticks" aria-hidden="true">
-              {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100].map((n) => (
-                <span key={n} className={n % 20 ? "minor" : ""} style={{ left: `${n}%` }}>
-                  {n % 20 ? "" : n}
-                </span>
-              ))}
+      {projectId && (
+        <div className="card" ref={buildingCard}>
+          <label className="field">
+            <span className="step">2</span>Building
+          </label>
+          <PickList
+            options={buildingOptions}
+            value={buildingId}
+            onChange={(id) => {
+              setMessage(null);
+              setBuildingId(id);
+            }}
+            loading={loading === "buildings"}
+            loadingText="Loading buildings…"
+            emptyText="No buildings linked to this project"
+          />
+          {building && (
+            <div className="hint">
+              {building.sqCount > 0 && building.sqCount < building.elevationCount
+                ? `${building.sqCount} of ${building.elevationCount} elevations have SQ`
+                : `${building.elevationCount} elevation${building.elevationCount === 1 ? "" : "s"}`}
             </div>
-          </div>
-          <div className="pct-input">
-            <input
-              id="pct"
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              value={pctText}
-              disabled={!elevation}
-              onFocus={(e) => e.currentTarget.select()}
-              onChange={(e) => {
-                // digits only, no leading zeros, max 100
-                let raw = e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
-                if (raw !== "" && Number(raw) > 100) raw = "100";
-                setPctText(raw);
-                setPercent(raw === "" ? current : Number(raw));
-              }}
-              onBlur={() => setPct(pctText === "" ? current : percent)}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  setPct(percent + STEP);
-                } else if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  setPct(percent - STEP);
-                }
-              }}
-            />
-            <span className="pct-sign">%</span>
-            <div className="pct-steppers">
-              <button
-                type="button"
-                aria-label="Increase 5%"
-                disabled={!elevation || percent >= 100}
-                onClick={() => setPct(percent + STEP)}
-              >
-                ▲
-              </button>
-              <button
-                type="button"
-                aria-label="Decrease 5%"
-                disabled={!elevation || percent <= 0}
-                onClick={() => setPct(percent - STEP)}
-              >
-                ▼
-              </button>
-            </div>
-          </div>
+          )}
         </div>
-        {elevation && (elevation.submittedBy || elevation.lastEdited) && (
-          <div className="hint">
-            {elevation.submittedBy ? `Last reported by ${elevation.submittedBy}` : "Last edited"}
-            {elevation.lastEdited ? ` · ${timeAgo(elevation.lastEdited, now)}` : ""}
-          </div>
-        )}
-        {isDecrease && (
-          <div className="reason-box">
-            <div className="reason-title">
-              Lowering from {current}% to {percent}%. Why?
+      )}
+
+      {buildingId && (
+        <div className="card" ref={elevationCard}>
+          <label className="field">
+            <span className="step">3</span>Elevation
+          </label>
+          <PickList
+            options={elevationOptions}
+            value={elevationId || null}
+            onChange={(id) => {
+              setMessage(null);
+              setElevationId(id);
+            }}
+            loading={loading === "elevations"}
+            loadingText="Loading elevations…"
+            emptyText="No elevations for this building"
+          />
+          {elevation && (elevation.submittedBy || elevation.lastEdited) && (
+            <div className="hint">
+              {elevation.submittedBy ? `Last reported by ${elevation.submittedBy}` : "Last edited"}
+              {elevation.lastEdited ? ` · ${timeAgo(elevation.lastEdited, now)}` : ""}
             </div>
-            <div className="reason-list" role="radiogroup" aria-label="Reason for lowering">
-              {reasons.map((r) => (
-                <label key={r.id || r.name} className={`reason-opt${reasonChoice === r.name ? " on" : ""}`}>
-                  <input
-                    type="radio"
-                    name="down-reason"
-                    value={r.name}
-                    checked={reasonChoice === r.name}
-                    onChange={() => setReasonChoice(r.name)}
-                  />
-                  {r.name}
-                </label>
-              ))}
-            </div>
-            {isOtherReason(reasonChoice) && (
+          )}
+        </div>
+      )}
+
+      {elevation && (
+        <div className="card" ref={completionCard}>
+          <label className="field" htmlFor="pct">
+            <span className="step">4</span>Completion
+          </label>
+          <div className="pct-row">
+            <div className="range-wrap">
               <input
-                type="text"
-                className="reason-other"
-                placeholder="Describe the reason"
-                maxLength={200}
-                value={reasonOther}
-                onChange={(e) => setReasonOther(e.target.value)}
-                autoFocus
+                type="range"
+                min={0}
+                max={100}
+                step={STEP}
+                value={percent}
+                onChange={(e) => setPct(Number(e.target.value))}
+                disabled={!elevation}
+                aria-label="Completion percent slider"
               />
-            )}
-            {!reasonOk && <div className="hint">Pick a reason to save.</div>}
-          </div>
-        )}
-
-        {elevation && (
-          <div className="photos">
-            <div className="photos-head">
-              <span className="photos-title">Photos</span>
+              <div className="ticks" aria-hidden="true">
+                {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100].map(
+                  (n) => (
+                    <span key={n} className={n % 20 ? "minor" : ""} style={{ left: `${n}%` }}>
+                      {n % 20 ? "" : n}
+                    </span>
+                  ),
+                )}
+              </div>
             </div>
-            <div className="photo-row">
-              {photos.map((p) => (
-                <div key={p.key} className="photo-thumb">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.preview} alt="" />
-                  <button type="button" aria-label="Remove photo" onClick={() => removePhoto(p.key)}>
-                    ×
-                  </button>
-                </div>
-              ))}
-              {photos.length < MAX_PHOTOS && (
-                <label className={`photo-add${photoBusy ? " busy" : ""}`}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => {
-                      addPhotos(e.target.files);
-                      e.target.value = "";
-                    }}
-                    disabled={photoBusy || saving}
-                  />
-                  <span>{photoBusy ? "…" : "📷"}</span>
-                  <small>{photoBusy ? "Adding" : "Add photo"}</small>
-                </label>
+            <div className="pct-input">
+              <input
+                id="pct"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={pctText}
+                disabled={!elevation}
+                onFocus={(e) => e.currentTarget.select()}
+                onChange={(e) => {
+                  // digits only, no leading zeros, max 100
+                  let raw = e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+                  if (raw !== "" && Number(raw) > 100) raw = "100";
+                  setPctText(raw);
+                  setPercent(raw === "" ? current : Number(raw));
+                }}
+                onBlur={() => setPct(pctText === "" ? current : percent)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setPct(percent + STEP);
+                  } else if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setPct(percent - STEP);
+                  }
+                }}
+              />
+              <span className="pct-sign">%</span>
+              <div className="pct-steppers">
+                <button
+                  type="button"
+                  aria-label="Increase 5%"
+                  disabled={!elevation || percent >= 100}
+                  onClick={() => setPct(percent + STEP)}
+                >
+                  ▲
+                </button>
+                <button
+                  type="button"
+                  aria-label="Decrease 5%"
+                  disabled={!elevation || percent <= 0}
+                  onClick={() => setPct(percent - STEP)}
+                >
+                  ▼
+                </button>
+              </div>
+            </div>
+          </div>
+          {elevation && (elevation.submittedBy || elevation.lastEdited) && (
+            <div className="hint">
+              {elevation.submittedBy ? `Last reported by ${elevation.submittedBy}` : "Last edited"}
+              {elevation.lastEdited ? ` · ${timeAgo(elevation.lastEdited, now)}` : ""}
+            </div>
+          )}
+          {isDecrease && (
+            <div className="reason-box">
+              <div className="reason-title">
+                Lowering from {current}% to {percent}%. Why?
+              </div>
+              <div className="reason-list" role="radiogroup" aria-label="Reason for lowering">
+                {reasons.map((r) => (
+                  <label key={r.id || r.name} className={`reason-opt${reasonChoice === r.name ? " on" : ""}`}>
+                    <input
+                      type="radio"
+                      name="down-reason"
+                      value={r.name}
+                      checked={reasonChoice === r.name}
+                      onChange={() => setReasonChoice(r.name)}
+                    />
+                    {r.name}
+                  </label>
+                ))}
+              </div>
+              {isOtherReason(reasonChoice) && (
+                <input
+                  type="text"
+                  className="reason-other"
+                  placeholder="Describe the reason"
+                  maxLength={200}
+                  value={reasonOther}
+                  onChange={(e) => setReasonOther(e.target.value)}
+                  autoFocus
+                />
               )}
-              {photos.length >= MAX_PHOTOS && (
-                <div className="photo-max">Max {MAX_PHOTOS} photos added</div>
+              {!reasonOk && <div className="hint">Pick a reason to save.</div>}
+            </div>
+          )}
+
+          {elevation && (
+            <div className="photos">
+              <div className="photos-head">
+                <span className="photos-title">Photos</span>
+              </div>
+              <div className="photo-row">
+                {photos.map((p) => (
+                  <div key={p.key} className="photo-thumb">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.preview} alt="" />
+                    <button type="button" aria-label="Remove photo" onClick={() => removePhoto(p.key)}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+                {photos.length < MAX_PHOTOS && (
+                  <label className={`photo-add${photoBusy ? " busy" : ""}`}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => {
+                        addPhotos(e.target.files);
+                        e.target.value = "";
+                      }}
+                      disabled={photoBusy || saving}
+                    />
+                    <span>{photoBusy ? "…" : "📷"}</span>
+                    <small>{photoBusy ? "Adding" : "Add photo"}</small>
+                  </label>
+                )}
+                {photos.length >= MAX_PHOTOS && (
+                  <div className="photo-max">Max {MAX_PHOTOS} photos added</div>
+                )}
+              </div>
+              {!photosOk && percent !== current && (
+                <div className="hint">A photo is recommended with each report.</div>
               )}
             </div>
-            {!photosOk && percent !== current && <div className="hint">A photo is recommended with each report.</div>}
-          </div>
-        )}
+          )}
 
-        <div style={{ marginTop: 16 }}>
-          <button className="btn" onClick={save} disabled={!canSave}>
-            {saving ? (photos.length ? "Uploading photos…" : "Saving…") : "Save progress"}
-          </button>
+          <div style={{ marginTop: 16 }}>
+            <button className="btn" onClick={save} disabled={!canSave}>
+              {saving ? (photos.length ? "Uploading photos…" : "Saving…") : "Save progress"}
+            </button>
+          </div>
+          {message && <div className={`msg ${message.kind}`}>{message.text}</div>}
         </div>
-        {message && <div className={`msg ${message.kind}`}>{message.text}</div>}
-      </div>
+      )}
     </main>
   );
 }
