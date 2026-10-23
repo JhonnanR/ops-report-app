@@ -464,7 +464,8 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
     overflow: visible; text-overflow: clip;
     white-space: normal; overflow-wrap: break-word; word-break: normal;
   }
-  .tree-title .tag { display: inline-flex; }
+  .tree-title .tag,
+  .tree-title .chip { display: inline-flex; font-size: 11px; padding: 2px 8px; }
 
   /* Report page – Building / Elevation field after picking */
   .pick-selected .pick-label {
