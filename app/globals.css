@@ -477,3 +477,12 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
   .pick-row .pick-label, .combo-list li { overflow-wrap: break-word; }
   .today-name { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: break-word; }
 }
+/* ---------- Phone: always show type + count bubbles ---------- */
+@media (max-width: 640px) {
+  .tree-row .tree-title .tag,
+  .tree-row .tree-title .chip,
+  .tree-row > .chip {
+    display: inline-flex !important;
+    font-size: 11px; padding: 2px 8px;
+  }
+}
