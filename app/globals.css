@@ -429,7 +429,35 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
 .today-change { white-space: nowrap; }
 .today-time { color: var(--muted); font-size: 13px; white-space: nowrap; }
 @media (max-width: 480px) {
-  .today-list li { grid-template-columns: minmax(0, 1fr) auto; }
-  .today-time { grid-column: 2; }
-  .today-change { grid-column: 1 / 3; grid-row: 2; font-size: 13px; color: var(--muted); }
+.today-list li { grid-template-columns: minmax(0, 1fr) auto; }
+.today-time { grid-column: 2; }
+.today-change { grid-column: 1 / 3; grid-row: 2; font-size: 13px; color: var(--muted); }
+}
+/* ---------- Phone: show full names (wrap instead of "…") ---------- */
+@media (max-width: 640px) {
+  /* Manager view – Projects tree */
+  .tree-row { align-items: start; }
+  .tree-title {
+    flex-wrap: wrap; row-gap: 4px;
+    white-space: normal; overflow: visible;
+  }
+  .tree-name-text {
+    overflow: visible; text-overflow: clip;
+    white-space: normal; overflow-wrap: anywhere;
+  }
+  .tree-title .tag, .tree-title .chip { display: inline-flex; } /* bring the bubbles back, they can wrap now */
+  .tree-row .progress, .tree-row .tree-when { align-self: center; }
+
+  /* Report page – Building / Elevation field after picking */
+  .pick-selected .pick-label {
+    white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
+  }
+  .pick-selected { align-items: center; }
+  .pick-bubbles { flex-wrap: wrap; justify-content: flex-end; }
+
+  /* Report page – open lists */
+  .pick-row .pick-label, .combo-list li { overflow-wrap: anywhere; }
+
+  /* Report page – Today list */
+  .today-name { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 }
