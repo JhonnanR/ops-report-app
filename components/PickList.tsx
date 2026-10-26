@@ -45,7 +45,9 @@ export default function PickList({
         aria-label="Change selection"
       >
         <span className="pick-label">{selected.label}</span>
-        {selected.done && <span className="done-mark">✓ Done today</span>}
+        {(selected.mark || selected.done) && (
+          <span className="done-mark">{selected.mark ?? "✓ Done today"}</span>
+        )}
         <span className="pick-bubbles">
           {selected.middle && <span className="tag tag-soft">{selected.middle}</span>}
           {selected.tag && <span className="tag">{selected.tag}</span>}
@@ -72,7 +74,7 @@ export default function PickList({
             }}
           >
             <span className="pick-label">{o.label}</span>
-            {o.done && <span className="done-mark">✓</span>}
+            {(o.mark || o.done) && <span className="done-mark">{o.mark ?? "✓"}</span>}
             {o.middle && (
               <span className="pick-middle">
                 <span className="tag tag-soft">{o.middle}</span>

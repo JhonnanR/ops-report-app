@@ -65,6 +65,7 @@ type TodayReport = {
   id: string;
   elevationId: string | null;
   elevation: string;
+  buildingId: string | null;
   from: number | null;
   to: number | null;
   at: string | null;
@@ -72,6 +73,12 @@ type TodayReport = {
 
 /** Page IDs sometimes come with dashes, sometimes without. */
 const norm = (id: string) => id.replace(/-/g, "");
+
+/** Building ✓: "✓ 2/8" once any of its elevations is reported today; greyed when all are done. */
+function doneMark(done: number, total: number): { mark?: string; done?: boolean } {
+  if (done === 0) return {};
+  return { mark: total > 0 ? `✓ ${Math.min(done, total)}/${total}` : "✓", done: total > 0 && done >= total };
+}
 
 /** Local midnight today, as ISO (the "session" resets each day). */
 function startOfToday(nowMs: number): string {
@@ -158,6 +165,17 @@ export default function Tracker({
     () => new Set(today.map((r) => (r.elevationId ? norm(r.elevationId) : "")).filter(Boolean)),
     [today],
   );
+    // Buildings: which elevations in each one were reported today → "✓ 2/8" on the building.
+  const doneByBuilding = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const r of today) {
+      if (!r.buildingId || !r.elevationId) continue;
+      const key = norm(r.buildingId);
+      if (!map.has(key)) map.set(key, new Set());
+      map.get(key)!.add(norm(r.elevationId));
+    }
+    return map;
+  }, [today]);
   const todayByElevation = useMemo(() => {
     const map = new Map<
       string,
@@ -320,8 +338,9 @@ export default function Tracker({
         label: b.number !== null ? `B${b.number}` : buildingLabel(b.name),
         middle: b.type ? b.type.replace(/^bldg\s+/i, "") : undefined,
         tag: b.percent !== null ? `${b.percent}% completed` : "No elevations",
+        ...doneMark(doneByBuilding.get(norm(b.id))?.size ?? 0, b.elevationCount),
       })),
-    [buildings],
+    [buildings, doneByBuilding],
   );
   const elevationOptions: Option[] = useMemo(
     () =>

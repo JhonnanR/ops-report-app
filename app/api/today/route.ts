@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
   const reports = pages.map((pg) => ({
     id: pg.id,
     elevationId: readRelationIds(pg, l.elevation)[0] ?? null,
+    buildingId: readRelationIds(pg, l.building)[0] ?? null,
     elevation: readText(pg, l.title).replace(/\s-\sRep\s\d+$/, ""),
     from: pct(readNumber(pg, l.from)),
     to: pct(readNumber(pg, l.to)),
