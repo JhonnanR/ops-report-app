@@ -64,8 +64,11 @@ async function compressImage(file: File, maxSide = 1600, quality = 0.8): Promise
 type TodayReport = {
   id: string;
   elevationId: string | null;
-  elevation: string;
   buildingId: string | null;
+  projectId: string | null;
+  project: string;
+  building: string; // short, e.g. "B1-3"
+  elevation: string; // code, e.g. "[A203-3]"
   from: number | null;
   to: number | null;
   at: string | null;
@@ -176,22 +179,41 @@ export default function Tracker({
     }
     return map;
   }, [today]);
-  const todayByElevation = useMemo(() => {
-    const map = new Map<
-      string,
-      { name: string; from: number | null; to: number | null; at: string | null; count: number }
-    >();
-    // reports are newest first: first seen = latest "to"/time, last seen = earliest "from"
+  // Bottom list: every report today, grouped under its project (newest first).
+  // The newest report for each elevation is highlighted; earlier ones are dimmed.
+    // Bottom list: every report today, grouped by project → building (newest first).
+  // The newest report for each elevation is highlighted; earlier ones are dimmed.
+   // Bottom list: every report today, grouped by project → building (newest first).
+  // The newest report for each elevation is highlighted; earlier ones are dimmed.
+  // "Latest edit" bubble only when that elevation was reported more than once today.
+  type TodayItem = TodayReport & { latest: boolean; repeated: boolean };
+  const todayGroups = useMemo(() => {
+    const keyOf = (r: TodayReport) => (r.elevationId ? norm(r.elevationId) : r.id);
+    const counts = new Map<string, number>();
+    for (const r of today) counts.set(keyOf(r), (counts.get(keyOf(r)) ?? 0) + 1);
+
+    const seen = new Set<string>();
+    const groups: {
+      key: string;
+      project: string;
+      buildings: { key: string; building: string; items: TodayItem[] }[];
+    }[] = [];
     for (const r of today) {
-      const key = r.elevationId ? norm(r.elevationId) : r.id;
-      const cur = map.get(key);
-      if (!cur) map.set(key, { name: r.elevation, from: r.from, to: r.to, at: r.at, count: 1 });
-      else {
-        cur.from = r.from;
-        cur.count += 1;
-      }
+      const elevKey = keyOf(r);
+      const latest = !seen.has(elevKey);
+      seen.add(elevKey);
+
+      const pKey = r.projectId ?? r.project;
+      let g = groups.find((x) => x.key === pKey);
+      if (!g) groups.push((g = { key: pKey, project: r.project, buildings: [] }));
+
+      const bKey = r.buildingId ? norm(r.buildingId) : r.building || "—";
+      let bg = g.buildings.find((x) => x.key === bKey);
+      if (!bg) g.buildings.push((bg = { key: bKey, building: r.building || "Other", items: [] }));
+
+      bg.items.push({ ...r, latest, repeated: (counts.get(elevKey) ?? 0) > 1 });
     }
-    return Array.from(map.values());
+    return groups;
   }, [today]);
 
   // Each step appears only after the one before it is done; scroll it into view on phones.
@@ -203,9 +225,11 @@ export default function Tracker({
   useEffect(() => {
     if (projectId) reveal(buildingCard.current);
   }, [projectId]);
+  // Elevations: scroll to the list once it has loaded (same as project → building).
+  const elevationsLoading = loading === "elevations";
   useEffect(() => {
-    if (buildingId) reveal(elevationCard.current);
-  }, [buildingId]);
+    if (buildingId && !elevationsLoading) reveal(elevationCard.current);
+  }, [buildingId, elevationsLoading]);
   useEffect(() => {
     if (elevationId) reveal(completionCard.current);
   }, [elevationId]);
@@ -697,26 +721,36 @@ export default function Tracker({
         </div>
       )}
 
-      {todayByElevation.length > 0 && (
+      {today.length > 0 && (
         <div className="card today">
           <div className="today-head">
-            <span className="today-title">Today</span>
+            <span className="today-title"> Changes Today</span>
             <span className="chip">
-              {todayByElevation.length} elevation{todayByElevation.length === 1 ? "" : "s"}
+              {doneToday.size} elevation{doneToday.size === 1 ? "" : "s"} · {today.length} report
+              {today.length === 1 ? "" : "s"}
             </span>
           </div>
-          <ul className="today-list">
-            {todayByElevation.map((t, i) => (
-              <li key={i}>
-                <span className="today-name">✓ {t.name}</span>
-                <span className="today-change">
-                  {t.from ?? 0}% → <strong>{t.to ?? 0}%</strong>
-                  {t.count > 1 ? ` (${t.count} reports)` : ""}
-                </span>
-                <span className="today-time">{timeOf(t.at)}</span>
-              </li>
-            ))}
-          </ul>
+          {todayGroups.map((g) => (
+            <div key={g.key} className="today-group">
+              <div className="today-project">{g.project}</div>
+              {g.buildings.map((bg) => (
+                <div key={bg.key} className="today-building">
+                  <div className="today-building-name">{bg.building}</div>
+                  <ul className="today-list">
+                    {bg.items.map((t) => (
+                      <li key={t.id} className={t.latest ? "latest" : "earlier"}>
+                        <span className="today-name">{t.elevation}</span>
+                        <span className="today-change">
+                          {t.from ?? 0}% → <strong>{t.to ?? 0}%</strong>
+                        </span>
+                        <span className="today-time">{timeOf(t.at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </main>

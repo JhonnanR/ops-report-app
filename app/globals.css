@@ -486,3 +486,25 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
     font-size: 11px; padding: 2px 8px;
   }
 }
+/* ---------- Today: project subheadings + latest change highlighted ---------- */
+.today-group + .today-group { margin-top: 14px; }
+.today-project {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--brand-2); padding: 6px 0 4px; border-bottom: 2px solid #e8eef6;
+}
+.today-group .today-list li:first-child { border-top: 0; }
+.today-list li.latest {
+  background: #eef5fc; border-left: 3px solid #3d86cf;
+  padding-left: 8px; padding-right: 6px; border-radius: 4px;
+}
+.today-list li.latest .today-name { font-weight: 600; }
+.today-list li.earlier { color: var(--muted); padding-left: 11px; }
+.today-list li.earlier .today-name { color: var(--muted); }
+.today-list li.earlier strong { font-weight: 500; }
+/* ---------- Today: building subheaders ---------- */
+.today-building { margin-top: 8px; padding-left: 10px; border-left: 2px solid #e8eef6; }
+.today-building-name {
+  font-size: 14px; font-weight: 700; color: var(--brand);
+  padding: 4px 0 2px;
+}
+.today-building .today-list li:first-child { border-top: 0; }
