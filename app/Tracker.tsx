@@ -393,11 +393,9 @@ export default function Tracker({
       await Promise.all([loadProjects(), projectId ? loadBuildings(projectId) : null, loadToday()]).catch(
         () => {},
       );
-      const bldg =
-        typeof data.buildingPercent === "number" ? ` Building overall: ${data.buildingPercent}%.` : "";
       setMessage({
         kind: "ok",
-        text: `Saved: ${elevation.code || elevation.name} is now ${percent}%.${bldg}`,
+        text: `Saved: ${elevation.code || elevation.name} is now ${percent}%.`,
       });
       setReasonChoice("");
       setReasonOther("");
