@@ -508,3 +508,23 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
   padding: 4px 0 2px;
 }
 .today-building .today-list li:first-child { border-top: 0; }
+/* ---------- Past Reports tab ---------- */
+.past-group + .past-group { margin-top: 18px; }
+.past-project {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 0 6px; border-bottom: 2px solid #e8eef6;
+}
+.past-project-name { font-weight: 700; font-size: 15px; color: var(--brand); }
+.past-project-when { margin-left: auto; font-size: 12px; color: var(--muted); }
+.past-list li:first-child { border-top: 0; }
+.past-count { color: var(--muted); font-size: 13px; }
+/* ---------- Past Reports ---------- */
+.past-group + .past-group { margin-top: 18px; }
+.past-project {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 0 6px; border-bottom: 2px solid #e8eef6;
+}
+.past-project-name { font-weight: 700; font-size: 15px; color: var(--brand); }
+.past-project-when { margin-left: auto; font-size: 12px; color: var(--muted); }
+.past-list li:first-child { border-top: 0; }
+.past-count { color: var(--muted); font-size: 13px; }

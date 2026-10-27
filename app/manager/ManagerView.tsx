@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { timeAgo } from "@/lib/timeAgo";
+import PastReports from "./PastReports";
 
 type Project = {
   id: string;
@@ -396,7 +397,8 @@ export default function ManagerView({ userName }: { userName: string }) {
           ))}
         </ul>
       </section>
-
+      {/* ---------- Past Reports (recap) ---------- */}
+      <PastReports />
       {/* ---------- History ---------- */}
       <section className="card">
         <h2 className="page-title">History</h2>
