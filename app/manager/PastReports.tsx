@@ -74,7 +74,7 @@ export default function PastReports() {
     return () => clearInterval(t);
   }, []);
 
-  const [open, setOpen] = useState(true); // section open/closed
+  const [open, setOpen] = useState(false); // section open/closed
   const [range, setRange] = useState<RangeKey>("7");
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
