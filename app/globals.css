@@ -543,3 +543,6 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
 .section-caret { font-size: 34px; line-height: 1; color: var(--muted); margin-bottom: 14px; }
 .section-toggle:hover .section-caret { color: var(--brand); }
 .section-toggle[aria-expanded="false"] .section-caret { margin-bottom: 4px; }
+/* Extra space under the elevation list so phones can scroll it into view */
+.scroll-room { height: 60vh; }
+@media (min-width: 641px) { .scroll-room { height: 0; } }

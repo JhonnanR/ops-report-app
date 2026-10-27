@@ -753,6 +753,8 @@ export default function Tracker({
           ))}
         </div>
       )}
+      {/* Room to scroll the elevation list into view on phones; goes away once an elevation is picked. */}
+      {buildingId && !elevationId && <div className="scroll-room" aria-hidden="true" />}
     </main>
   );
 }
