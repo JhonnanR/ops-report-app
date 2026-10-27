@@ -74,6 +74,7 @@ export default function PastReports() {
     return () => clearInterval(t);
   }, []);
 
+  const [open, setOpen] = useState(true); // section open/closed
   const [range, setRange] = useState<RangeKey>("7");
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,70 +132,82 @@ export default function PastReports() {
   return (
     <>
       <section className="card">
-        <h2 className="page-title">Past Reports</h2>
-        {error && <div className="msg err">{error}</div>}
+        <button type="button" className="section-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span className="page-title">Past Reports</span>
+          <span className="section-caret" aria-hidden="true">
+            {open ? "▾" : "▸"}
+          </span>
+        </button>
 
-        <div className="toolbar">
-          <div className="chips" role="group" aria-label="Time range">
-            {RANGES.map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                className={`chip-btn${range === r.key ? " on" : ""}`}
-                onClick={() => setRange(r.key)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-          {!loading && reports.length > 0 && (
-            <span className="chip">
-              {groups.length} project{groups.length === 1 ? "" : "s"} · {elevationCount} elevation
-              {elevationCount === 1 ? "" : "s"} · {reports.length} report{reports.length === 1 ? "" : "s"}
-            </span>
-          )}
-        </div>
+        {open && (
+          <>
+            {error && <div className="msg err">{error}</div>}
 
-        {!enabled && <div className="hint">History isn&apos;t set up yet (NOTION_LOG_DB is missing).</div>}
-        {loading && <div className="hint">Loading reports…</div>}
-        {!loading && enabled && reports.length === 0 && <div className="hint">No reports in this period.</div>}
-
-        {!loading &&
-          groups.map((g) => (
-            <div key={g.key} className="past-group">
-              <div className="past-project">
-                <span className="past-project-name">{g.project}</span>
-                <span className="chip">
-                  {g.elevations} elevation{g.elevations === 1 ? "" : "s"}
-                </span>
-                <span className="past-project-when">{g.latestAt ? `Last report ${timeAgo(g.latestAt, now)}` : ""}</span>
+            <div className="toolbar">
+              <div className="chips" role="group" aria-label="Time range">
+                {RANGES.map((r) => (
+                  <button
+                    key={r.key}
+                    type="button"
+                    className={`chip-btn${range === r.key ? " on" : ""}`}
+                    onClick={() => setRange(r.key)}
+                  >
+                    {r.label}
+                  </button>
+                ))}
               </div>
-              {g.buildings.map((bg) => (
-                <div key={bg.key} className="today-building">
-                  <div className="today-building-name">{bg.building}</div>
-                  <ul className="today-list past-list">
-                    {bg.rows.map((row) => {
-                      const down = (row.to ?? 0) < (row.from ?? 0);
-                      return (
-                        <li key={row.key} className={range !== "today" && isToday(row.at) ? "latest" : ""}>
-                          <span className="today-name">{row.elevation}</span>
-                          <span className="today-change">
-                            {row.from ?? 0}% → <strong>{row.to ?? 0}%</strong>
-                            {down && <span className="down-flag"> ↓</span>}
-                            {row.count > 1 && <span className="past-count"> · {row.count} reports</span>}
-                          </span>
-                          <span className="today-time">
-                            {row.by ? `${row.by} · ` : ""}
-                            {row.at ? timeAgo(row.at, now) : ""}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
+              {!loading && reports.length > 0 && (
+                <span className="chip">
+                  {groups.length} project{groups.length === 1 ? "" : "s"} · {elevationCount} elevation
+                  {elevationCount === 1 ? "" : "s"} · {reports.length} report{reports.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+
+            {!enabled && <div className="hint">History isn&apos;t set up yet (NOTION_LOG_DB is missing).</div>}
+            {loading && <div className="hint">Loading reports…</div>}
+            {!loading && enabled && reports.length === 0 && <div className="hint">No reports in this period.</div>}
+
+            {!loading &&
+              groups.map((g) => (
+                <div key={g.key} className="past-group">
+                  <div className="past-project">
+                    <span className="past-project-name">{g.project}</span>
+                    <span className="chip">
+                      {g.elevations} elevation{g.elevations === 1 ? "" : "s"}
+                    </span>
+                    <span className="past-project-when">
+                      {g.latestAt ? `Last report ${timeAgo(g.latestAt, now)}` : ""}
+                    </span>
+                  </div>
+                  {g.buildings.map((bg) => (
+                    <div key={bg.key} className="today-building">
+                      <div className="today-building-name">{bg.building}</div>
+                      <ul className="today-list past-list">
+                        {bg.rows.map((row) => {
+                          const down = (row.to ?? 0) < (row.from ?? 0);
+                          return (
+                            <li key={row.key} className={range !== "today" && isToday(row.at) ? "latest" : ""}>
+                              <span className="today-name">{row.elevation}</span>
+                              <span className="today-change">
+                                {row.from ?? 0}% → <strong>{row.to ?? 0}%</strong>
+                                {down && <span className="down-flag"> ↓</span>}
+                                {row.count > 1 && <span className="past-count"> · {row.count} reports</span>}
+                              </span>
+                              <span className="today-time">
+                                {row.by ? `${row.by} · ` : ""}
+                                {row.at ? timeAgo(row.at, now) : ""}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ))}
                 </div>
               ))}
-            </div>
-          ))}
+          </>
+        )}
       </section>
     </>
   );

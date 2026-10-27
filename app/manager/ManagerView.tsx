@@ -187,6 +187,7 @@ export default function ManagerView({ userName }: { userName: string }) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyEnabled, setHistoryEnabled] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false); // History section open/closed
 
   useEffect(() => {
     getJson<{ supervisors: string[] }>("/api/manager/supervisors")
@@ -401,7 +402,20 @@ export default function ManagerView({ userName }: { userName: string }) {
       <PastReports />
       {/* ---------- History ---------- */}
       <section className="card">
-        <h2 className="page-title">History</h2>
+        <button
+          type="button"
+          className="section-toggle"
+          onClick={() => setHistoryOpen((o) => !o)}
+          aria-expanded={historyOpen}
+        >
+          <span className="page-title">History</span>
+          <span className="section-caret" aria-hidden="true">
+            {historyOpen ? "▾" : "▸"}
+          </span>
+        </button>
+
+        {historyOpen && (
+          <>
 
         {historyEnabled && (
           <div className="toolbar toolbar-end">
@@ -537,6 +551,8 @@ export default function ManagerView({ userName }: { userName: string }) {
                 </button>
               )}
             </div>
+          </>
+        )}
           </>
         )}
       </section>
