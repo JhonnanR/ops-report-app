@@ -546,3 +546,5 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
 /* Extra space under the elevation list so phones can scroll it into view */
 .scroll-room { height: 60vh; }
 @media (min-width: 641px) { .scroll-room { height: 0; } }
+/* Photo required note */
+.photo-required { color: #7a5200; font-weight: 600; }

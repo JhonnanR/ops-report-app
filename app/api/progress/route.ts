@@ -49,7 +49,11 @@ export async function POST(req: NextRequest) {
   const e = props.elevations;
   const b = props.buildings;
 
-  const photosEnabled = Boolean(config.logDb && props.log.photos); // photos are optional
+  const photosEnabled = Boolean(config.logDb && props.log.photos);
+  // A photo is required with every report.
+  if (photosEnabled && photoIds.length === 0) {
+    return NextResponse.json({ error: "Add at least 1 photo to save this report." }, { status: 400 });
+  }
 
   // Make sure the page really is an elevation, and find its building + project.
   const page = await getPage(elevationId);

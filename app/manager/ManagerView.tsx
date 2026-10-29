@@ -99,8 +99,14 @@ function Progress({ percent }: { percent: number | null }) {
     </span>
   );
 }
-/** "B1" from Bldg #, or the short name if Bldg # is empty. */
-function bldgCode(b: { name: string; number: number | null }): string {
+/** Amenity = a building whose type isn't "Bldg Type N" / "Type N" (e.g. "Cabana", "Clubhouse"). */
+function isAmenity(type?: string | null): boolean {
+  return !!type && !/^(bldg\.?\s*)?type\b/i.test(type.trim());
+}
+
+/** Amenities show their type ("Cabana"); others show "B1" from Bldg #, or the short name if Bldg # is empty. */
+function bldgCode(b: { name: string; number: number | null; type?: string }): string {
+  if (isAmenity(b.type)) return b.type!.trim();
   return b.number !== null ? `B${b.number}` : shortName(b.name);
 }
 
@@ -132,6 +138,7 @@ export default function ManagerView({ userName }: { userName: string }) {
   const [openProjects, setOpenProjects] = useState<Set<string>>(new Set());
   const [openBuildings, setOpenBuildings] = useState<Set<string>>(new Set());
   const [division, setDivision] = useState(""); // "" = all divisions
+  const [projectsOpen, setProjectsOpen] = useState(true); // Projects section open/closed
   const [buildingsBy, setBuildingsBy] = useState<Record<string, Building[]>>({});
   const [elevationsBy, setElevationsBy] = useState<Record<string, Elevation[]>>({});
 
@@ -305,7 +312,20 @@ export default function ManagerView({ userName }: { userName: string }) {
 
       {/* ---------- Projects overview ---------- */}
       <section className="card">
-        <h2 className="page-title">Projects</h2>
+        <button
+          type="button"
+          className="section-toggle"
+          onClick={() => setProjectsOpen((o) => !o)}
+          aria-expanded={projectsOpen}
+        >
+          <span className="page-title">Projects</span>
+          <span className="section-caret" aria-hidden="true">
+            {projectsOpen ? "▾" : "▸"}
+          </span>
+        </button>
+
+        {projectsOpen && (
+          <>
 
         <div className="toolbar">
           <div className="chips" role="group" aria-label="Filter by division">
@@ -359,7 +379,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                         <span className="caret">{openBuildings.has(b.id) ? "▾" : "▸"}</span>
                         <span className="tree-title" title={b.name}>
                           <span className="tree-name-text">{bldgCode(b)}</span>
-                          {b.type && <span className="tag tag-soft">{bldgType(b.type)}</span>}
+                          {b.type && !isAmenity(b.type) && <span className="tag tag-soft">{bldgType(b.type)}</span>}
                           <span className="chip">
                             {b.elevationCount} elevation{b.elevationCount === 1 ? "" : "s"}
                           </span>
@@ -397,6 +417,8 @@ export default function ManagerView({ userName }: { userName: string }) {
             </li>
           ))}
         </ul>
+          </>
+        )}
       </section>
       {/* ---------- Past Reports (recap) ---------- */}
       <PastReports />
@@ -468,7 +490,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                   {filterBuildings.map((b) => (
                     <option key={b.id} value={b.id}>
                       {bldgCode(b)}
-                      {b.type ? ` · ${bldgType(b.type)}` : ""}
+                      {b.type && !isAmenity(b.type) ? ` · ${bldgType(b.type)}` : ""}
                     </option>
                   ))}
                 </select>

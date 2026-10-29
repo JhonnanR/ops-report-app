@@ -77,6 +77,8 @@ type TodayReport = {
 /** Page IDs sometimes come with dashes, sometimes without. */
 const norm = (id: string) => id.replace(/-/g, "");
 
+/** Amenity = a building whose type isn't "Bldg Type N" / "Type N" (e.g. "Cabana", "Clubhouse"). */
+const isAmenity = (type?: string | null) => !!type && !/^(bldg\.?\s*)?type\b/i.test(type.trim());
 /** Building ✓: "✓ 2/8" once any of its elevations is reported today; greyed when all are done. */
 function doneMark(done: number, total: number): { mark?: string; done?: boolean } {
   if (done === 0) return {};
@@ -359,8 +361,13 @@ export default function Tracker({
       buildings.map((b) => ({
         id: b.id,
         // "B1" + type in the middle ("Type 1", "Cabana"…). Falls back to the name if Bldg # is empty.
-        label: b.number !== null ? `B${b.number}` : buildingLabel(b.name),
-        middle: b.type ? b.type.replace(/^bldg\s+/i, "") : undefined,
+        // Amenities (Cabana, Clubhouse…) show their type as the name; regular buildings show "B1" + type bubble.
+        label: isAmenity(b.type)
+          ? b.type.trim()
+          : b.number !== null
+            ? `B${b.number}`
+            : buildingLabel(b.name),
+        middle: b.type && !isAmenity(b.type) ? b.type.replace(/^bldg\s+/i, "") : undefined,
         tag: b.percent !== null ? `${b.percent}% completed` : "No elevations",
         ...doneMark(doneByBuilding.get(norm(b.id))?.size ?? 0, b.elevationCount),
       })),
@@ -387,7 +394,7 @@ export default function Tracker({
   const reasonOk = !isDecrease || reasonText !== "";
   const photosOk = photos.length > 0;
   const canSave =
-    elevation !== null && pctText !== "" && percent !== current && reasonOk && !saving && !photoBusy;
+    elevation !== null && pctText !== "" && percent !== current && reasonOk && photosOk && !saving && !photoBusy;
 
   async function save() {
     if (!elevation || !canSave) return;
@@ -674,7 +681,7 @@ export default function Tracker({
           {elevation && (
             <div className="photos">
               <div className="photos-head">
-                <span className="photos-title">Photos</span>
+                <span className="photos-title">Photos (at least 1)</span>
               </div>
               <div className="photo-row">
                 {photos.map((p) => (
@@ -706,15 +713,15 @@ export default function Tracker({
                   <div className="photo-max">Max {MAX_PHOTOS} photos added</div>
                 )}
               </div>
-              {!photosOk && percent !== current && (
-                <div className="hint">A photo is recommended with each report.</div>
+              {!photosOk && (
+                <div className="hint photo-required">Add at least 1 photo to save this report.</div>
               )}
             </div>
           )}
 
           <div style={{ marginTop: 16 }}>
             <button className="btn" onClick={save} disabled={!canSave}>
-              {saving ? (photos.length ? "Uploading photos…" : "Saving…") : "Save progress"}
+              {saving ? (photos.length ? "Uploading photos…" : "Saving…") : "Save report"}
             </button>
           </div>
           {message && <div className={`msg ${message.kind}`}>{message.text}</div>}

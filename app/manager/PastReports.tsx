@@ -187,7 +187,7 @@ export default function PastReports() {
                         {bg.rows.map((row) => {
                           const down = (row.to ?? 0) < (row.from ?? 0);
                           return (
-                            <li key={row.key} className={range !== "today" && isToday(row.at) ? "latest" : ""}>
+                            <li key={row.key} className={isToday(row.at) ? "latest" : ""}>
                               <span className="today-name">{row.elevation}</span>
                               <span className="today-change">
                                 {row.from ?? 0}% → <strong>{row.to ?? 0}%</strong>
