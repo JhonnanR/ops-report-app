@@ -108,12 +108,13 @@ function isAmenity(type?: string | null): boolean {
   return !!type && !/^(bldg\.?\s*)?type\b/i.test(type.trim());
 }
 /** "✓ 5/8": elevations at 100% out of all. Green bubble when everything is complete. */
-function CompleteMark({ done, total }: { done: number; total: number }) {
-  if (total === 0) return null;
-  const all = done >= total;
+function CompleteMark({ done, total }: { done?: number; total?: number }) {
+  const d = done ?? 0;
+  const t = total ?? 0;
+  const all = t > 0 && d >= t;
   return (
-    <span className={`complete-mark${all ? " all" : ""}`} title={`${done} of ${total} elevations at 100%`}>
-      ✓ {done}/{total}
+    <span className={`complete-mark${all ? " all" : ""}`} title={`${d} of ${t} elevations at 100%`}>
+      ✓ {d}/{t}
     </span>
   );
 }

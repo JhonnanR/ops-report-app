@@ -41,7 +41,7 @@ export async function GET() {
   const elevByBuilding = elevationsByBuilding(elevationPages);
   const buildingsByProject = new Map<string, { percent: number | null; sq: number | null }[]>();
   const lastReportedByProject = new Map<string, string>();
-    // Elevations at 100% vs all elevations, per project.
+  // Elevations at 100% vs all elevations, per project.
   const countsByProject = new Map<string, { done: number; total: number }>();
   for (const bp of buildingPages) {
     const rows = elevByBuilding.get(norm(bp.id)) ?? [];
