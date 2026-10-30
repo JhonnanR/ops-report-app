@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
   const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 100) : "";
   const reasonId = typeof body.reasonId === "string" ? body.reasonId.trim().slice(0, 100) : "";
   const reasonOther = typeof body.reasonOther === "string" ? body.reasonOther.trim().slice(0, 300) : "";
-  // Photo upload IDs from /api/upload (optional, up to 3)
+  const description = typeof body.description === "string" ? body.description.trim().slice(0, 1000) : "";
+  // Photo upload IDs from /api/upload (1–3, required)
   const photoIds: string[] = Array.isArray(body.photoIds)
     ? body.photoIds.filter((x: unknown): x is string => typeof x === "string" && /^[0-9a-f-]{32,36}$/i.test(x)).slice(0, 3)
     : [];
@@ -131,6 +132,10 @@ export async function POST(req: NextRequest) {
         ...(isDecrease && l.reason ? { [l.reason]: { select: reasonId ? { id: reasonId } : { name: reason } } } : {}),
         ...(isDecrease && isOther && l.reasonOther
           ? { [l.reasonOther]: { rich_text: [{ text: { content: reasonOther } }] } }
+          : {}),
+        // Description (optional note, Text column)
+        ...(description && l.description
+          ? { [l.description]: { rich_text: [{ text: { content: description } }] } }
           : {}),
         // Photos (Notion "Files & media" column)
         ...(photosEnabled && photoIds.length

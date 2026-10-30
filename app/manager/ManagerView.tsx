@@ -16,6 +16,8 @@ type Project = {
   included: number;
   total: number;
   lastReported: string | null;
+  elevDone: number;
+  elevTotal: number;
 };
 type Building = {
   id: string;
@@ -23,6 +25,7 @@ type Building = {
   type: string;
   number: number | null;
   elevationCount: number;
+  doneCount: number;
   percent: number | null;
   lastReported: string | null;
 };
@@ -44,6 +47,7 @@ type HistoryRow = {
   at: string | null;
   reason: string;
   photos: string[];
+  description: string;
 };
 type Filters = {
   supervisor: string;
@@ -103,7 +107,16 @@ function Progress({ percent }: { percent: number | null }) {
 function isAmenity(type?: string | null): boolean {
   return !!type && !/^(bldg\.?\s*)?type\b/i.test(type.trim());
 }
-
+/** "✓ 5/8": elevations at 100% out of all. Green bubble when everything is complete. */
+function CompleteMark({ done, total }: { done: number; total: number }) {
+  if (total === 0) return null;
+  const all = done >= total;
+  return (
+    <span className={`complete-mark${all ? " all" : ""}`} title={`${done} of ${total} elevations at 100%`}>
+      ✓ {done}/{total}
+    </span>
+  );
+}
 /** Amenities show their type ("Cabana"); others show "B1" from Bldg #, or the short name if Bldg # is empty. */
 function bldgCode(b: { name: string; number: number | null; type?: string }): string {
   if (isAmenity(b.type)) return b.type!.trim();
@@ -362,6 +375,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                   <span className="chip">
                     {p.total} building{p.total === 1 ? "" : "s"}
                   </span>
+                  <CompleteMark done={p.elevDone} total={p.elevTotal} />
                 </span>
                 <Progress percent={p.percent} />
                 <span className="tree-when">
@@ -383,6 +397,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                           <span className="chip">
                             {b.elevationCount} elevation{b.elevationCount === 1 ? "" : "s"}
                           </span>
+                          <CompleteMark done={b.doneCount} total={b.elevationCount} />
                         </span>
                         <Progress percent={b.percent} />
                         <span className="tree-when">
@@ -399,6 +414,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                               <span className="caret" />
                               <span className="tree-title">
                                 <span className="tree-name-text">{el.code || el.name}</span>
+                              {(el.percent ?? 0) >= 100 && <span className="complete-mark all">✓ Complete</span>}
                               </span>
                               <Progress percent={el.percent ?? 0} />
                               <span className="tree-when">
@@ -530,6 +546,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                       <th>Elevation</th>
                       <th>Change</th>
                       <th>By</th>
+                      <th>Description</th>
                       <th>Photos</th>
                     </tr>
                   </thead>
@@ -549,6 +566,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                           {h.reason && <div className="tree-sub">{h.reason}</div>}
                         </td>
                         <td>{h.by}</td>
+                        <td className="history-desc">{h.description}</td>
                         <td>
                           {h.photos.length > 0 && (
                             <div className="history-photos">

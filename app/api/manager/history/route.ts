@@ -71,6 +71,7 @@ export async function GET(req: NextRequest) {
       return other ? `${choice || "Other"}: ${other}` : choice;
     })(),
     photos: l.photos ? readFiles(pg, l.photos).map((f) => f.url) : [],
+    description: l.description ? readText(pg, l.description) : "",
   }));
 
   return NextResponse.json({ history, nextCursor, enabled: true });

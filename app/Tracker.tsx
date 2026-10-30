@@ -154,6 +154,7 @@ export default function Tracker({
 
   // Today's reports by this supervisor (resets at local midnight).
   const [today, setToday] = useState<TodayReport[]>([]);
+  const [todayOpen, setTodayOpen] = useState(true); // Changes Today open/closed
   const dayKey = new Date(now).toDateString(); // changes at midnight → reload
   const loadToday = useCallback(async () => {
     const d = await getJson<{ reports: TodayReport[] }>(
@@ -183,11 +184,6 @@ export default function Tracker({
   }, [today]);
   // Bottom list: every report today, grouped under its project (newest first).
   // The newest report for each elevation is highlighted; earlier ones are dimmed.
-    // Bottom list: every report today, grouped by project → building (newest first).
-  // The newest report for each elevation is highlighted; earlier ones are dimmed.
-   // Bottom list: every report today, grouped by project → building (newest first).
-  // The newest report for each elevation is highlighted; earlier ones are dimmed.
-  // "Latest edit" bubble only when that elevation was reported more than once today.
   type TodayItem = TodayReport & { latest: boolean; repeated: boolean };
   const todayGroups = useMemo(() => {
     const keyOf = (r: TodayReport) => (r.elevationId ? norm(r.elevationId) : r.id);
@@ -246,6 +242,7 @@ export default function Tracker({
   const [reasons, setReasons] = useState<Reason[]>([]);
   const [reasonChoice, setReasonChoice] = useState(""); // option name
   const [reasonOther, setReasonOther] = useState("");
+  const [description, setDescription] = useState(""); // optional note with the report
 
   // Photos for this save (optional, up to 3)
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -344,6 +341,7 @@ export default function Tracker({
     setPctText(String(start));
     setReasonChoice("");
     setReasonOther("");
+    setDescription("");
     clearPhotos();
   }, [elevation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -421,6 +419,7 @@ export default function Tracker({
           elevationId: elevation.id,
           percent,
           photoIds,
+          description: description.trim() || undefined,
           ...(isDecrease
             ? {
                 reason: reasonChoice,
@@ -449,6 +448,7 @@ export default function Tracker({
       });
       setReasonChoice("");
       setReasonOther("");
+      setDescription("");
       clearPhotos();
     } catch (e) {
       setMessage({ kind: "err", text: e instanceof Error ? e.message : "Save failed." });
@@ -718,7 +718,22 @@ export default function Tracker({
               )}
             </div>
           )}
-
+          {elevation && (
+            <div className="description-box">
+              <label className="field" htmlFor="report-description">
+                Description <span className="optional">(optional)</span>
+              </label>
+              <textarea
+                id="report-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={1000}
+                rows={3}
+                placeholder="Notes about this report…"
+                disabled={saving}
+              />
+            </div>
+          )}
           <div style={{ marginTop: 16 }}>
             <button className="btn" onClick={save} disabled={!canSave}>
               {saving ? (photos.length ? "Uploading photos…" : "Saving…") : "Save report"}
@@ -730,34 +745,43 @@ export default function Tracker({
 
       {today.length > 0 && (
         <div className="card today">
-          <div className="today-head">
-            <span className="today-title"> Changes Today</span>
+          <button
+            type="button"
+            className="today-head today-toggle"
+            onClick={() => setTodayOpen((o) => !o)}
+            aria-expanded={todayOpen}
+          >
+            <span className="today-title">Changes Today</span>
             <span className="chip">
               {doneToday.size} elevation{doneToday.size === 1 ? "" : "s"} · {today.length} report
               {today.length === 1 ? "" : "s"}
             </span>
-          </div>
-          {todayGroups.map((g) => (
-            <div key={g.key} className="today-group">
-              <div className="today-project">{g.project}</div>
-              {g.buildings.map((bg) => (
-                <div key={bg.key} className="today-building">
-                  <div className="today-building-name">{bg.building}</div>
-                  <ul className="today-list">
-                    {bg.items.map((t) => (
-                      <li key={t.id} className={t.latest ? "latest" : "earlier"}>
-                        <span className="today-name">{t.elevation}</span>
-                        <span className="today-change">
-                          {t.from ?? 0}% → <strong>{t.to ?? 0}%</strong>
-                        </span>
-                        <span className="today-time">{timeOf(t.at)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          ))}
+            <span className="section-caret" aria-hidden="true">
+              {todayOpen ? "▾" : "▸"}
+            </span>
+          </button>
+          {todayOpen &&
+            todayGroups.map((g) => (
+              <div key={g.key} className="today-group">
+                <div className="today-project">{g.project}</div>
+                {g.buildings.map((bg) => (
+                  <div key={bg.key} className="today-building">
+                    <div className="today-building-name">{bg.building}</div>
+                    <ul className="today-list">
+                      {bg.items.map((t) => (
+                        <li key={t.id} className={t.latest ? "latest" : "earlier"}>
+                          <span className="today-name">{t.elevation}</span>
+                          <span className="today-change">
+                            {t.from ?? 0}% → <strong>{t.to ?? 0}%</strong>
+                          </span>
+                          <span className="today-time">{timeOf(t.at)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ))}
         </div>
       )}
       {/* Room to scroll the elevation list into view on phones; goes away once an elevation is picked. */}

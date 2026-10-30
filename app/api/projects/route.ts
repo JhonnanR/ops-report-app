@@ -41,12 +41,19 @@ export async function GET() {
   const elevByBuilding = elevationsByBuilding(elevationPages);
   const buildingsByProject = new Map<string, { percent: number | null; sq: number | null }[]>();
   const lastReportedByProject = new Map<string, string>();
+    // Elevations at 100% vs all elevations, per project.
+  const countsByProject = new Map<string, { done: number; total: number }>();
   for (const bp of buildingPages) {
     const rows = elevByBuilding.get(norm(bp.id)) ?? [];
     const row = { percent: buildingPercent(rows).percent, sq: readNumber(bp, b.sq) };
     const reported = readDate(bp, b.lastReported);
+    const doneHere = rows.filter((r) => r.percent >= 100).length;
     for (const pid of readRelationIds(bp, b.project)) {
       const key = norm(pid);
+      const c = countsByProject.get(key) ?? { done: 0, total: 0 };
+      c.done += doneHere;
+      c.total += rows.length;
+      countsByProject.set(key, c);
       if (rows.length) withElevations.add(key);
       if (!buildingsByProject.has(key)) buildingsByProject.set(key, []);
       buildingsByProject.get(key)!.push(row);
@@ -72,6 +79,8 @@ export async function GET() {
         included: w.included, // buildings that have progress
         total: w.total, // all buildings on the project
         lastReported: lastReportedByProject.get(norm(pg.id)) ?? null,
+        elevDone: countsByProject.get(norm(pg.id))?.done ?? 0, // elevations at 100%
+        elevTotal: countsByProject.get(norm(pg.id))?.total ?? 0, // all elevations
       };
     })
     .filter((x) => x.name);

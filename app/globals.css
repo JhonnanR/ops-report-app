@@ -548,3 +548,32 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
 @media (min-width: 641px) { .scroll-room { height: 0; } }
 /* Photo required note */
 .photo-required { color: #7a5200; font-weight: 600; }
+/* ---------- Report: optional description ---------- */
+.description-box { margin-top: 14px; }
+.description-box .optional { font-weight: 400; color: var(--muted); }
+.description-box textarea {
+  width: 100%; min-height: 84px; resize: vertical;
+  font: inherit; font-size: 16px; padding: 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--text);
+}
+.description-box textarea:focus { outline: 2px solid var(--brand-2); outline-offset: 1px; }
+/* History: description column */
+.history-desc { min-width: 160px; max-width: 280px; white-space: pre-wrap; color: var(--text); font-size: 13px; }
+/* ---------- Changes Today: open/close header ---------- */
+.today-toggle {
+  width: 100%; padding: 0; border: 0; background: none;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  gap: 10px;
+}
+.today-toggle .chip { margin-left: auto; }
+.today-toggle .section-caret { margin-bottom: 0; font-size: 28px; }
+.today-toggle[aria-expanded="false"] { margin-bottom: 0; }
+.today-toggle:hover .section-caret { color: var(--brand); }
+
+/* ---------- Manager view: elevations complete (✓ 5/8) ---------- */
+.complete-mark {
+  flex: none; font-size: 12px; font-weight: 700; color: var(--ok); white-space: nowrap;
+}
+.complete-mark.all {
+  background: #e7f5ee; padding: 2px 8px; border-radius: 999px;
+}
