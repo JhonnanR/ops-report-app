@@ -190,7 +190,7 @@ export default function Tracker({
 
   // Today's reports by this supervisor (resets at local midnight).
   const [today, setToday] = useState<TodayReport[]>([]);
-  const [todayOpen, setTodayOpen] = useState(true); // Changes Today open/closed
+  const [todayOpen, setTodayOpen] = useState(false); // Changes Today open/closed
   const dayKey = new Date(now).toDateString(); // changes at midnight → reload
   const loadToday = useCallback(async () => {
     const r = await getJsonCached<{ reports: TodayReport[] }>(
