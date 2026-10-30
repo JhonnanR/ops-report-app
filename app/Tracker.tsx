@@ -6,6 +6,23 @@ import { useRouter } from "next/navigation";
 import PickList from "@/components/PickList";
 import SearchSelect, { type Option } from "@/components/SearchSelect";
 import { timeAgo } from "@/lib/timeAgo";
+import {
+  clearPhoneData,
+  flushOutbox,
+  getJsonCached,
+  loadList,
+  newReportId,
+  OfflineError,
+  outboxAll,
+  outboxDelete,
+  outboxPut,
+  saveList,
+  sendReport,
+  SignedOutError,
+  storageNearlyFull,
+  type OutboxItem,
+  type ReportPayload,
+} from "@/lib/offline";
 
 type Project = {
   id: string;
@@ -67,11 +84,12 @@ type TodayReport = {
   buildingId: string | null;
   projectId: string | null;
   project: string;
-  building: string; // short, e.g. "B1-3"
+  building: string; // short, e.g. "B1"
   elevation: string; // code, e.g. "[A203-3]"
   from: number | null;
   to: number | null;
   at: string | null;
+  pending?: boolean; // saved on the phone, waiting to send
 };
 
 /** Page IDs sometimes come with dashes, sometimes without. */
@@ -96,6 +114,15 @@ function startOfToday(nowMs: number): string {
 const timeOf = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "";
 
+/** "9:42 AM" if today, otherwise "Oct 28, 9:42 AM" */
+function savedAt(ms: number): string {
+  const d = new Date(ms);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  return sameDay
+    ? timeOf(d.toISOString())
+    : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 type Reason = { id: string; name: string };
 /** The reason whose name contains "Other" opens a text box. */
 const isOtherReason = (name: string) => /other/i.test(name);
@@ -107,17 +134,6 @@ function buildingLabel(name: string): string {
     .map((s) => s.trim())
     .filter(Boolean);
   return (parts.length > 1 ? parts.slice(1) : parts).join(" - ");
-}
-
-async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { cache: "no-store" });
-  if (res.status === 401) {
-    window.location.href = "/login";
-    throw new Error("Signed out");
-  }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Something went wrong.");
-  return data as T;
 }
 
 export default function Tracker({
@@ -145,6 +161,26 @@ export default function Tracker({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
+  // ---------- Offline ----------
+  const [online, setOnline] = useState(true);
+  const [listsFrom, setListsFrom] = useState<number | null>(null); // showing lists saved at this time
+  const [outbox, setOutbox] = useState<OutboxItem[]>([]);
+  const [sendState, setSendState] = useState<{ done: number; total: number } | null>(null);
+  const [signedOut, setSignedOut] = useState(false);
+  const [storageFull, setStorageFull] = useState(false);
+
+  /** A list came from the phone's saved copy (no signal) → show the "No signal" banner. */
+  const noteCached = (at: number | null) => {
+    if (at !== null) setListsFrom((prev) => (prev === null ? at : Math.min(prev, at)));
+  };
+  const showError = (e: unknown) => {
+    if (e instanceof SignedOutError) {
+      window.location.href = "/login";
+      return;
+    }
+    setMessage({ kind: "err", text: e instanceof Error ? e.message : "Something went wrong." });
+  };
+
   // Ticks every minute so "x minutes ago" stays current.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -157,51 +193,70 @@ export default function Tracker({
   const [todayOpen, setTodayOpen] = useState(true); // Changes Today open/closed
   const dayKey = new Date(now).toDateString(); // changes at midnight → reload
   const loadToday = useCallback(async () => {
-    const d = await getJson<{ reports: TodayReport[] }>(
+    const r = await getJsonCached<{ reports: TodayReport[] }>(
       `/api/today?since=${encodeURIComponent(startOfToday(Date.now()))}`,
+      `today:${new Date().toDateString()}`,
     );
-    setToday(d.reports);
+    setToday(r.data.reports);
   }, []);
   useEffect(() => {
     loadToday().catch(() => {});
   }, [dayKey, loadToday]);
 
-  // Elevations reported today → darkened in the list. Bottom list groups by elevation.
+  // Reports waiting on this phone show in Changes Today too (marked "Waiting").
+  const todayAll = useMemo(() => {
+    const start = Date.parse(startOfToday(now));
+    const pending: TodayReport[] = outbox
+      .filter((o) => Date.parse(o.createdAt) >= start)
+      .map((o) => ({
+        id: o.id,
+        elevationId: o.elevationId,
+        buildingId: o.buildingId,
+        projectId: o.projectId,
+        project: o.project,
+        building: o.building,
+        elevation: o.elevation,
+        from: o.from,
+        to: o.percent,
+        at: o.createdAt,
+        pending: true,
+      }));
+    return [...pending, ...today].sort((a, z) => (z.at ?? "").localeCompare(a.at ?? ""));
+  }, [outbox, today, now]);
+
+  // Elevations reported today → darkened in the list.
   const doneToday = useMemo(
-    () => new Set(today.map((r) => (r.elevationId ? norm(r.elevationId) : "")).filter(Boolean)),
-    [today],
+    () => new Set(todayAll.map((r) => (r.elevationId ? norm(r.elevationId) : "")).filter(Boolean)),
+    [todayAll],
   );
-    // Buildings: which elevations in each one were reported today → "✓ 2/8" on the building.
+  // Buildings: which elevations in each one were reported today → "✓ 2/8" on the building.
   const doneByBuilding = useMemo(() => {
     const map = new Map<string, Set<string>>();
-    for (const r of today) {
+    for (const r of todayAll) {
       if (!r.buildingId || !r.elevationId) continue;
       const key = norm(r.buildingId);
       if (!map.has(key)) map.set(key, new Set());
       map.get(key)!.add(norm(r.elevationId));
     }
     return map;
-  }, [today]);
-  // Bottom list: every report today, grouped under its project (newest first).
-  // The newest report for each elevation is highlighted; earlier ones are dimmed.
-  type TodayItem = TodayReport & { latest: boolean; repeated: boolean };
-  const todayGroups = useMemo(() => {
-    const keyOf = (r: TodayReport) => (r.elevationId ? norm(r.elevationId) : r.id);
-    const counts = new Map<string, number>();
-    for (const r of today) counts.set(keyOf(r), (counts.get(keyOf(r)) ?? 0) + 1);
+  }, [todayAll]);
 
+  // Bottom list: every report today, grouped by project → building (newest first).
+  // The newest report for each elevation is highlighted; earlier ones are dimmed.
+  type TodayItem = TodayReport & { latest: boolean };
+  const todayGroups = useMemo(() => {
     const seen = new Set<string>();
     const groups: {
       key: string;
       project: string;
       buildings: { key: string; building: string; items: TodayItem[] }[];
     }[] = [];
-    for (const r of today) {
-      const elevKey = keyOf(r);
+    for (const r of todayAll) {
+      const elevKey = r.elevationId ? norm(r.elevationId) : r.id;
       const latest = !seen.has(elevKey);
       seen.add(elevKey);
 
-      const pKey = r.projectId ?? r.project;
+      const pKey = r.projectId ? norm(r.projectId) : r.project;
       let g = groups.find((x) => x.key === pKey);
       if (!g) groups.push((g = { key: pKey, project: r.project, buildings: [] }));
 
@@ -209,10 +264,10 @@ export default function Tracker({
       let bg = g.buildings.find((x) => x.key === bKey);
       if (!bg) g.buildings.push((bg = { key: bKey, building: r.building || "Other", items: [] }));
 
-      bg.items.push({ ...r, latest, repeated: (counts.get(elevKey) ?? 0) > 1 });
+      bg.items.push({ ...r, latest });
     }
     return groups;
-  }, [today]);
+  }, [todayAll]);
 
   // Each step appears only after the one before it is done; scroll it into view on phones.
   const buildingCard = useRef<HTMLDivElement>(null);
@@ -244,7 +299,7 @@ export default function Tracker({
   const [reasonOther, setReasonOther] = useState("");
   const [description, setDescription] = useState(""); // optional note with the report
 
-  // Photos for this save (optional, up to 3)
+  // Photos for this save (at least 1, up to 3)
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [photoBusy, setPhotoBusy] = useState(false);
 
@@ -283,8 +338,8 @@ export default function Tracker({
   }
 
   useEffect(() => {
-    getJson<{ reasons: Reason[] }>("/api/reasons")
-      .then((d) => setReasons(d.reasons))
+    getJsonCached<{ reasons: Reason[] }>("/api/reasons", "reasons")
+      .then((r) => setReasons(r.data.reasons))
       .catch(() => {});
   }, []);
 
@@ -295,21 +350,52 @@ export default function Tracker({
   }
 
   const loadProjects = useCallback(async () => {
-    const d = await getJson<{ projects: Project[] }>("/api/projects");
-    setProjects(d.projects);
+    const r = await getJsonCached<{ projects: Project[] }>("/api/projects", "projects");
+    setProjects(r.data.projects);
+    if (r.cachedAt === null) setListsFrom(null);
+    noteCached(r.cachedAt);
   }, []);
 
-  const loadBuildings = useCallback(async (pid: string) => {
-    const d = await getJson<{ buildings: Building[] }>(`/api/buildings?projectId=${pid}`);
-    setBuildings(d.buildings);
+  /** While online, save every building's elevation list too, so they can be opened with no signal. */
+  const prefetchElevations = useCallback(async (list: Building[]) => {
+    for (const b of list) {
+      const key = `elevations:${b.id}`;
+      const saved = loadList(key);
+      if (saved && Date.now() - saved.at < 30 * 60_000) continue; // saved in the last 30 min
+      try {
+        const r = await getJsonCached(`/api/elevations?buildingId=${b.id}`, key);
+        if (r.cachedAt !== null) return; // lost signal: stop
+      } catch {
+        return;
+      }
+    }
+  }, []);
+
+  const loadBuildings = useCallback(
+    async (pid: string) => {
+      const r = await getJsonCached<{ buildings: Building[] }>(`/api/buildings?projectId=${pid}`, `buildings:${pid}`);
+      setBuildings(r.data.buildings);
+      noteCached(r.cachedAt);
+      if (r.cachedAt === null) prefetchElevations(r.data.buildings).catch(() => {});
+    },
+    [prefetchElevations],
+  );
+
+  const loadElevations = useCallback(async (bid: string) => {
+    const r = await getJsonCached<{ elevations: Elevation[] }>(
+      `/api/elevations?buildingId=${bid}`,
+      `elevations:${bid}`,
+    );
+    setElevations(r.data.elevations);
+    noteCached(r.cachedAt);
   }, []);
 
   // 1. Projects
   useEffect(() => {
     loadProjects()
-      .catch((e) => setMessage({ kind: "err", text: e.message }))
+      .catch(showError)
       .finally(() => setLoading(null));
-  }, [loadProjects]);
+  }, [loadProjects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 2. Buildings for the chosen project
   useEffect(() => {
@@ -318,9 +404,9 @@ export default function Tracker({
     if (!projectId) return;
     setLoading("buildings");
     loadBuildings(projectId)
-      .catch((e) => setMessage({ kind: "err", text: e.message }))
+      .catch(showError)
       .finally(() => setLoading(null));
-  }, [projectId, loadBuildings]);
+  }, [projectId, loadBuildings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 3. Elevations for the chosen building
   useEffect(() => {
@@ -328,11 +414,10 @@ export default function Tracker({
     setElevationId("");
     if (!buildingId) return;
     setLoading("elevations");
-    getJson<{ elevations: Elevation[] }>(`/api/elevations?buildingId=${buildingId}`)
-      .then((d) => setElevations(d.elevations))
-      .catch((e) => setMessage({ kind: "err", text: e.message }))
+    loadElevations(buildingId)
+      .catch(showError)
       .finally(() => setLoading(null));
-  }, [buildingId]);
+  }, [buildingId, loadElevations]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Start at the elevation's current value, with no reason picked.
   useEffect(() => {
@@ -344,6 +429,94 @@ export default function Tracker({
     setDescription("");
     clearPhotos();
   }, [elevation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Reload everything shown (after reports were sent, or the connection came back). */
+  const refreshAll = useCallback(async () => {
+    await Promise.all([
+      loadProjects(),
+      projectId ? loadBuildings(projectId) : null,
+      buildingId ? loadElevations(buildingId) : null,
+      loadToday(),
+    ]);
+  }, [loadProjects, loadBuildings, loadElevations, loadToday, projectId, buildingId]);
+
+  /** Show a saved report on this phone right away (new %, ✓ marks), and keep it in the saved list. */
+  function applyLocally(elevId: string, bid: string | null, pct: number) {
+    const update = (e: Elevation) =>
+      e.id === elevId ? { ...e, percent: pct, submittedBy: supervisorName, lastEdited: new Date().toISOString() } : e;
+    setElevations((list) => list.map(update));
+    if (bid) {
+      const key = `elevations:${bid}`;
+      const saved = loadList<{ elevations: Elevation[] }>(key);
+      if (saved) saveList(key, { elevations: saved.data.elevations.map(update) });
+    }
+  }
+
+  // ---------- Outbox: send waiting reports ----------
+  const flushing = useRef(false);
+  const reloadOutbox = useCallback(async () => {
+    setOutbox(await outboxAll());
+    setStorageFull(await storageNearlyFull());
+  }, []);
+
+  const flush = useCallback(async () => {
+    if (flushing.current) return;
+    const items = await outboxAll();
+    setOutbox(items);
+    const waiting = items.filter((i) => i.status === "waiting").length;
+    if (waiting === 0 || !navigator.onLine) return;
+    flushing.current = true;
+    setSendState({ done: 0, total: waiting });
+    try {
+      const r = await flushOutbox((done, total) => setSendState({ done, total }));
+      setSignedOut(r.stopped === "signed-out");
+      if (r.sent > 0) {
+        setMessage({ kind: "ok", text: `Sent ${r.sent} waiting report${r.sent === 1 ? "" : "s"}.` });
+        await refreshAll().catch(() => {});
+      }
+    } finally {
+      flushing.current = false;
+      setSendState(null);
+      await reloadOutbox();
+    }
+  }, [refreshAll, reloadOutbox]);
+
+  // Send when the app opens, when the signal comes back, when the app is reopened, and every 30 s.
+  useEffect(() => {
+    setOnline(navigator.onLine);
+    const goOnline = () => {
+      setOnline(true);
+      flush();
+      refreshAll().catch(() => {});
+    };
+    const goOffline = () => setOnline(false);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") flush();
+    };
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    document.addEventListener("visibilitychange", onVisible);
+    const t = setInterval(flush, 30_000);
+    flush();
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(t);
+    };
+  }, [flush, refreshAll]);
+
+  async function retryFailed(item: OutboxItem) {
+    await outboxPut({ ...item, status: "waiting", error: undefined });
+    await flush();
+  }
+
+  async function discardFailed(item: OutboxItem) {
+    if (!window.confirm("Discard this report? It won't be saved.")) return;
+    await outboxDelete(item.id);
+    await reloadOutbox();
+    refreshAll().catch(() => {});
+  }
 
   const projectOptions: Option[] = useMemo(
     () =>
@@ -358,13 +531,8 @@ export default function Tracker({
     () =>
       buildings.map((b) => ({
         id: b.id,
-        // "B1" + type in the middle ("Type 1", "Cabana"…). Falls back to the name if Bldg # is empty.
         // Amenities (Cabana, Clubhouse…) show their type as the name; regular buildings show "B1" + type bubble.
-        label: isAmenity(b.type)
-          ? b.type.trim()
-          : b.number !== null
-            ? `B${b.number}`
-            : buildingLabel(b.name),
+        label: isAmenity(b.type) ? b.type.trim() : b.number !== null ? `B${b.number}` : buildingLabel(b.name),
         middle: b.type && !isAmenity(b.type) ? b.type.replace(/^bldg\s+/i, "") : undefined,
         tag: b.percent !== null ? `${b.percent}% completed` : "No elevations",
         ...doneMark(doneByBuilding.get(norm(b.id))?.size ?? 0, b.elevationCount),
@@ -398,70 +566,105 @@ export default function Tracker({
     if (!elevation || !canSave) return;
     setSaving(true);
     setMessage(null);
-    try {
-      // 1. Upload the photos to Notion (one request each)
-      const photoIds = await Promise.all(
-        photos.map(async (p, i) => {
-          const form = new FormData();
-          form.append("file", p.blob, `photo-${i + 1}.jpg`);
-          const up = await fetch("/api/upload", { method: "POST", body: form });
-          const d = await up.json().catch(() => ({}));
-          if (!up.ok || !d.id) throw new Error(d.error || "Photo upload failed.");
-          return d.id as string;
-        }),
-      );
 
-      // 2. Save the progress with the photos attached
-      const res = await fetch("/api/progress", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          elevationId: elevation.id,
-          percent,
-          photoIds,
-          description: description.trim() || undefined,
-          ...(isDecrease
-            ? {
-                reason: reasonChoice,
-                reasonId: chosenReason?.id || undefined,
-                ...(isOtherReason(reasonChoice) ? { reasonOther: reasonOther.trim() } : {}),
-              }
-            : {}),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Save failed.");
-      setElevations((list) =>
-        list.map((e) =>
-          e.id === elevation.id
-            ? { ...e, percent, submittedBy: supervisorName, lastEdited: new Date().toISOString() }
-            : e,
-        ),
-      );
-      // Refresh project % and building % (keeps the current selection).
-      await Promise.all([loadProjects(), projectId ? loadBuildings(projectId) : null, loadToday()]).catch(
-        () => {},
-      );
-      setMessage({
-        kind: "ok",
-        text: `Saved: ${elevation.code || elevation.name} is now ${percent}%.`,
-      });
+    const payload: ReportPayload = {
+      reportId: newReportId(),
+      changedAt: new Date().toISOString(),
+      elevationId: elevation.id,
+      percent,
+      photos: photos.map((p) => p.blob),
+      description: description.trim() || undefined,
+      ...(isDecrease
+        ? {
+            reason: reasonChoice,
+            reasonId: chosenReason?.id || undefined,
+            reasonOther: isOtherReason(reasonChoice) ? reasonOther.trim() : undefined,
+          }
+        : {}),
+    };
+    const label = elevation.code || elevation.name;
+    const clearForm = () => {
       setReasonChoice("");
       setReasonOther("");
       setDescription("");
       clearPhotos();
+    };
+
+    /** No signal (or signed out): keep the report on this phone and send it later. */
+    async function keepForLater(why: "offline" | "signed-out") {
+      const opt = buildingOptions.find((o) => o.id === buildingId);
+      await outboxPut({
+        id: payload.reportId,
+        createdAt: payload.changedAt,
+        elevationId: payload.elevationId,
+        percent: payload.percent,
+        from: current,
+        reason: payload.reason,
+        reasonId: payload.reasonId,
+        reasonOther: payload.reasonOther,
+        description: payload.description,
+        photos: payload.photos,
+        project: project?.name ?? "",
+        projectId: projectId,
+        building: opt?.label ?? "",
+        buildingId: buildingId,
+        elevation: label,
+        status: "waiting",
+      });
+      applyLocally(payload.elevationId, buildingId, payload.percent);
+      await reloadOutbox();
+      clearForm();
+      if (why === "signed-out") setSignedOut(true);
+      setMessage({
+        kind: "ok",
+        text:
+          why === "offline"
+            ? `No signal: ${label} (${percent}%) is saved on this phone and will send automatically when you're back online.`
+            : `Your sign-in expired: ${label} (${percent}%) is saved on this phone and will send after you sign in again.`,
+      });
+    }
+
+    try {
+      await sendReport(payload);
+      applyLocally(payload.elevationId, buildingId, payload.percent);
+      // Refresh project % and building % (keeps the current selection).
+      await Promise.all([loadProjects(), projectId ? loadBuildings(projectId) : null, loadToday()]).catch(
+        () => {},
+      );
+      setMessage({ kind: "ok", text: `Saved: ${label} is now ${percent}%.` });
+      clearForm();
     } catch (e) {
-      setMessage({ kind: "err", text: e instanceof Error ? e.message : "Save failed." });
+      try {
+        if (e instanceof OfflineError) await keepForLater("offline");
+        else if (e instanceof SignedOutError) await keepForLater("signed-out");
+        else setMessage({ kind: "err", text: e instanceof Error ? e.message : "Save failed." });
+      } catch {
+        setMessage({ kind: "err", text: "No signal, and this report couldn't be saved on the phone. Try again." });
+      }
     } finally {
       setSaving(false);
     }
   }
 
   async function logout() {
-    await fetch("/api/logout", { method: "POST" });
+    const waiting = (await outboxAll()).length;
+    if (
+      waiting > 0 &&
+      !window.confirm(
+        `${waiting} report${waiting === 1 ? " hasn't" : "s haven't"} been sent yet. ` +
+          "Signing out deletes them from this phone. Sign out anyway?",
+      )
+    ) {
+      return;
+    }
+    await clearPhoneData();
+    await fetch("/api/logout", { method: "POST" }).catch(() => {});
     router.replace("/login");
     router.refresh();
   }
+
+  const waitingReports = outbox.filter((o) => o.status === "waiting");
+  const failedReports = outbox.filter((o) => o.status === "failed");
 
   return (
     <main className="shell">
@@ -486,6 +689,68 @@ export default function Tracker({
             Manager view
           </Link>
         </nav>
+      )}
+
+      {/* ---------- No signal ---------- */}
+      {(!online || listsFrom !== null) && (
+        <div className="offline-banner">
+          <strong>No signal.</strong>{" "}
+          {listsFrom !== null ? `Showing lists saved ${savedAt(listsFrom)}. ` : "Showing saved lists. "}
+          Reports you save will send automatically when you&apos;re back online.
+        </div>
+      )}
+
+      {/* ---------- Reports waiting on this phone ---------- */}
+      {(waitingReports.length > 0 || failedReports.length > 0) && (
+        <div className="card outbox">
+          {waitingReports.length > 0 && (
+            <div className="outbox-head">
+              <span className="outbox-title">
+                📤 {waitingReports.length} report{waitingReports.length === 1 ? "" : "s"} waiting to send
+              </span>
+              <button
+                type="button"
+                className="btn-tool"
+                onClick={() => flush()}
+                disabled={!!sendState || !online}
+              >
+                {sendState
+                  ? `Sending ${Math.min(sendState.done + 1, sendState.total)} of ${sendState.total}…`
+                  : "Send now"}
+              </button>
+            </div>
+          )}
+          {signedOut && (
+            <div className="hint outbox-warn">
+              Your sign-in expired. <a href="/login">Sign in again</a> to send them.
+            </div>
+          )}
+          {storageFull && (
+            <div className="hint outbox-warn">
+              This phone is almost out of space for waiting reports. Send them as soon as you have signal.
+            </div>
+          )}
+          {failedReports.map((f) => (
+            <div key={f.id} className="outbox-failed">
+              <div>
+                <strong>
+                  {f.building ? `${f.building} - ` : ""}
+                  {f.elevation}
+                </strong>{" "}
+                {f.from}% → {f.percent}%
+                <div className="hint">Couldn&apos;t send: {f.error}</div>
+              </div>
+              <div className="outbox-actions">
+                <button type="button" className="btn-tool" onClick={() => retryFailed(f)} disabled={!online}>
+                  Retry
+                </button>
+                <button type="button" className="btn-tool" onClick={() => discardFailed(f)}>
+                  Discard
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       <div className="card">
@@ -709,13 +974,9 @@ export default function Tracker({
                     <small>{photoBusy ? "Adding" : "Add photo"}</small>
                   </label>
                 )}
-                {photos.length >= MAX_PHOTOS && (
-                  <div className="photo-max">Max {MAX_PHOTOS} photos added</div>
-                )}
+                {photos.length >= MAX_PHOTOS && <div className="photo-max">Max {MAX_PHOTOS} photos added</div>}
               </div>
-              {!photosOk && (
-                <div className="hint photo-required">Add at least 1 photo to save this report.</div>
-              )}
+              {!photosOk && <div className="hint photo-required">Add at least 1 photo to save this report.</div>}
             </div>
           )}
           {elevation && (
@@ -743,7 +1004,7 @@ export default function Tracker({
         </div>
       )}
 
-      {today.length > 0 && (
+      {todayAll.length > 0 && (
         <div className="card today">
           <button
             type="button"
@@ -753,8 +1014,8 @@ export default function Tracker({
           >
             <span className="today-title">Changes Today</span>
             <span className="chip">
-              {doneToday.size} elevation{doneToday.size === 1 ? "" : "s"} · {today.length} report
-              {today.length === 1 ? "" : "s"}
+              {doneToday.size} elevation{doneToday.size === 1 ? "" : "s"} · {todayAll.length} report
+              {todayAll.length === 1 ? "" : "s"}
             </span>
             <span className="section-caret" aria-hidden="true">
               {todayOpen ? "▾" : "▸"}
@@ -769,8 +1030,14 @@ export default function Tracker({
                     <div className="today-building-name">{bg.building}</div>
                     <ul className="today-list">
                       {bg.items.map((t) => (
-                        <li key={t.id} className={t.latest ? "latest" : "earlier"}>
-                          <span className="today-name">{t.elevation}</span>
+                        <li
+                          key={t.id}
+                          className={`${t.latest ? "latest" : "earlier"}${t.pending ? " pending" : ""}`}
+                        >
+                          <span className="today-name">
+                            {t.elevation}
+                            {t.pending && <span className="tag pending-tag">Waiting</span>}
+                          </span>
                           <span className="today-change">
                             {t.from ?? 0}% → <strong>{t.to ?? 0}%</strong>
                           </span>

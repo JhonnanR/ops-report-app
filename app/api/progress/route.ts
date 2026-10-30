@@ -26,6 +26,14 @@ async function buildingAverage(buildingId: string, saved: { id: string; percent:
   return bp.percent === null ? saved.percent : Math.round(bp.percent);
 }
 
+/** Reports made offline keep the time they were made (up to 30 days back, never in the future). */
+function reportTime(raw: unknown): string {
+  const now = Date.now();
+  const t = typeof raw === "string" ? Date.parse(raw) : NaN;
+  if (Number.isNaN(t) || t > now + 5 * 60_000 || t < now - 30 * 24 * 3600_000) return new Date(now).toISOString();
+  return new Date(t).toISOString();
+}
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -37,6 +45,11 @@ export async function POST(req: NextRequest) {
   const reasonId = typeof body.reasonId === "string" ? body.reasonId.trim().slice(0, 100) : "";
   const reasonOther = typeof body.reasonOther === "string" ? body.reasonOther.trim().slice(0, 300) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 1000) : "";
+  // Unique ID from the phone, so a report sent twice (weak signal / offline outbox) is only saved once.
+  const reportId =
+    typeof body.reportId === "string" && /^[0-9a-f-]{32,36}$/i.test(body.reportId) ? body.reportId : "";
+  // When the report was made (offline reports are sent later).
+  const reportedAt = reportTime(body.changedAt);
   // Photo upload IDs from /api/upload (1–3, required)
   const photoIds: string[] = Array.isArray(body.photoIds)
     ? body.photoIds.filter((x: unknown): x is string => typeof x === "string" && /^[0-9a-f-]{32,36}$/i.test(x)).slice(0, 3)
@@ -49,11 +62,24 @@ export async function POST(req: NextRequest) {
 
   const e = props.elevations;
   const b = props.buildings;
+  const l = props.log;
 
-  const photosEnabled = Boolean(config.logDb && props.log.photos);
+  const photosEnabled = Boolean(config.logDb && l.photos);
   // A photo is required with every report.
   if (photosEnabled && photoIds.length === 0) {
     return NextResponse.json({ error: "Add at least 1 photo to save this report." }, { status: 400 });
+  }
+
+  // Already saved? (the phone sent it again after a dropped connection) → just say OK.
+  if (reportId && config.logDb && l.reportId) {
+    const existing = await queryAll(
+      config.logDb,
+      { filter: { property: l.reportId, rich_text: { equals: reportId } } },
+      1,
+    );
+    if (existing.length) {
+      return NextResponse.json({ ok: true, duplicate: true, percent, submittedBy: session.name, logged: true });
+    }
   }
 
   // Make sure the page really is an elevation, and find its building + project.
@@ -67,9 +93,7 @@ export async function POST(req: NextRequest) {
   // Many elevations don't have Project filled in. Fall back to the building's project.
   if (projectIds.length === 0 && buildingIds.length) {
     const buildingPages = await Promise.all(buildingIds.map((id) => getPage(id).catch(() => null)));
-    projectIds = [
-      ...new Set(buildingPages.flatMap((bp) => (bp ? readRelationIds(bp, b.project) : []))),
-    ];
+    projectIds = [...new Set(buildingPages.flatMap((bp) => (bp ? readRelationIds(bp, b.project) : [])))];
   }
 
   // Progress can go down, but only with a reason.
@@ -77,10 +101,7 @@ export async function POST(req: NextRequest) {
   const isDecrease = percent < current;
   const isOther = /other/i.test(reason); // the option whose name contains "Other" needs a typed reason
   if (isDecrease && (!reason || (isOther && !reasonOther))) {
-    return NextResponse.json(
-      { error: `Lowering from ${current}% to ${percent}% needs a reason.` },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: `Lowering from ${current}% to ${percent}% needs a reason.` }, { status: 400 });
   }
 
   // 1. Save the elevation (and replace its Latest Photo with this save's photos).
@@ -107,7 +128,6 @@ export async function POST(req: NextRequest) {
   // 2. Add a row to the history log (never blocks the save if it fails).
   let logged = false;
   if (config.logDb) {
-    const l = props.log;
     const elevationName = readText(page, e.code) || readText(page, e.name) || "Elevation";
     try {
       // Report number for this elevation: existing reports + 1 → "… - Rep 3"
@@ -126,7 +146,9 @@ export async function POST(req: NextRequest) {
         [l.to]: { number: percent / 100 },
         [l.changedBy]: { rich_text: [{ text: { content: session.name } }] },
         [l.changedByEmail]: { email: session.email || null },
-        [l.changedAt]: { date: { start: now } },
+        [l.changedAt]: { date: { start: reportedAt } },
+        // Unique report ID (duplicate check)
+        ...(reportId && l.reportId ? { [l.reportId]: { rich_text: [{ text: { content: reportId } }] } } : {}),
         // Reason (Notion Select) + Other Reason (Text, only when "Other" was picked)
         // Select by option ID when we have it (rename-safe), otherwise by name.
         ...(isDecrease && l.reason ? { [l.reason]: { select: reasonId ? { id: reasonId } : { name: reason } } } : {}),
@@ -174,7 +196,7 @@ export async function POST(req: NextRequest) {
     percent,
     buildingPercent: buildingPercents[0] ?? null,
     submittedBy: session.name,
-    at: now,
+    at: reportedAt,
     logged,
   });
 }

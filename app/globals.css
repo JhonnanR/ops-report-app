@@ -577,3 +577,19 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
 .complete-mark.all {
   background: #e7f5ee; padding: 2px 8px; border-radius: 999px;
 }
+/* ---------- Offline: banner, waiting reports ---------- */
+.offline-banner {
+  background: #fff8e6; border: 1px solid #f0c36d; color: #7a5200;
+  padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; font-size: 14px;
+}
+.outbox { border-color: #9fb3c8; }
+.outbox-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.outbox-title { font-weight: 700; color: var(--brand); }
+.outbox-warn { color: #7a5200; font-weight: 600; }
+.outbox-failed {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding: 8px 0; border-top: 1px solid var(--border); font-size: 14px; margin-top: 8px;
+}
+.outbox-actions { display: flex; gap: 6px; }
+.today-list li.pending { border-left-style: dashed; }
+.pending-tag { margin-left: 8px; background: #fff8e6; color: #7a5200; font-size: 11px; }
