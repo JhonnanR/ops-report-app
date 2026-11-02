@@ -644,3 +644,6 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
   .combo-tags .tag,
   .combo-tags .done-mark { font-size: 11px; padding: 2px 6px; }
 }
+/* Changes Today: arrow right next to the title, count on the far right */
+.today-toggle .section-caret { margin-left: -4px; line-height: 1; }
+.today-toggle .chip { margin-left: auto; }

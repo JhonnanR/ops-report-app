@@ -1012,12 +1012,12 @@ export default function Tracker({
             aria-expanded={todayOpen}
           >
             <span className="today-title">Changes Today</span>
+            <span className="section-caret" aria-hidden="true">
+              {todayOpen ? "▾" : "▸"}
+            </span>
             <span className="chip">
               {doneToday.size} elevation{doneToday.size === 1 ? "" : "s"} · {todayAll.length} report
               {todayAll.length === 1 ? "" : "s"}
-            </span>
-            <span className="section-caret" aria-hidden="true">
-              {todayOpen ? "▾" : "▸"}
             </span>
           </button>
           {todayOpen &&
