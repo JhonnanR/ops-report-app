@@ -2,7 +2,15 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-export type Option = { id: string; label: string; middle?: string; tag?: string; done?: boolean; mark?: string };
+export type Option = {
+  id: string;
+  label: string;
+  middle?: string;
+  tag?: string;
+  done?: boolean; // everything reported today → row shaded dark
+  mark?: string; // count bubble, e.g. "✓ 3/9 bldg."
+  markOn?: boolean; // true = green with ✓, false = grey
+};
 
 /** Text typed/shown in the field once an option is picked (the middle + tag show as bubbles). */
 const textOf = (o: Option) => o.label;
@@ -95,7 +103,7 @@ export default function SearchSelect({
     <div
       className={`combo${searchable ? "" : " plain"}${selected?.tag ? " has-tag" : ""}${
         selected?.middle && selected?.tag ? " has-tag2" : ""
-      }`}
+      }${selected?.mark ? " has-mark" : ""}`}
       ref={wrapRef}
     >
       <input
@@ -126,8 +134,11 @@ export default function SearchSelect({
         onKeyDown={onKey}
       />
       {/* The selected option's bubbles show inside the field, on the right */}
-      {selected && (selected.middle || selected.tag) && !disabled && (
+      {selected && (selected.middle || selected.tag || selected.mark) && !disabled && (
         <span className="combo-tags">
+          {selected.mark && (
+            <span className={`done-mark${selected.markOn ? "" : " off"}`}>{selected.mark}</span>
+          )}
           {selected.middle && <span className="tag tag-soft">{selected.middle}</span>}
           {selected.tag && <span className="tag">{selected.tag}</span>}
         </span>
@@ -140,6 +151,7 @@ export default function SearchSelect({
               key={o.id}
               role="option"
               aria-selected={i === active}
+             className={o.done ? "combo-done" : undefined}
               onMouseEnter={() => setActive(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -147,6 +159,7 @@ export default function SearchSelect({
               }}
             >
               <span className="combo-label">{o.label}</span>
+              {o.mark && <span className={`done-mark${o.markOn ? "" : " off"}`}>{o.mark}</span>}
               {o.middle && (
                 <span className="combo-middle">
                   <span className="tag tag-soft">{o.middle}</span>

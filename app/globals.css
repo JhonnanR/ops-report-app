@@ -615,3 +615,32 @@ body { min-height: 100%; -webkit-overflow-scrolling: touch; }
 .today-group + .today-group { margin-top: 18px; }
 .today-building-name { font-size: 14px; font-weight: 700; color: var(--brand); padding: 4px 0 2px; }
 .today-list li { font-size: 14px; }
+/* ---------- Manager view: "3/6 bldg." / "2/8 elev." ---------- */
+.complete-mark {
+  flex: none; font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap;
+}
+.complete-mark.all {
+  color: var(--ok); background: #e7f5ee; padding: 2px 8px; border-radius: 999px; font-weight: 700;
+}
+/* ---------- Green ✓ bubbles (Report tab + Manager view) ---------- */
+.complete-mark,
+.complete-mark.all,
+.done-mark {
+  display: inline-flex; align-items: center; flex: none;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
+  color: var(--ok); background: #e7f5ee;
+  padding: 2px 8px; border-radius: 999px;
+}
+/* ---------- Report tab: grey count until reported, green ✓ after ---------- */
+.done-mark.off { color: var(--muted); background: #eef1f5; }
+.combo-list li.combo-done { background: #e3e7ec; color: #4a5563; }
+.combo-list li.combo-done:hover { background: #d9dee5; }
+.combo-list li .done-mark { margin-left: 8px; }
+/* Project box: room for the bldg. bubble next to the % bubble */
+.combo.has-mark input { padding-right: 250px; }
+@media (max-width: 480px) {
+  .combo.has-mark input { padding-right: 200px; }
+  .combo-tags { gap: 4px; }
+  .combo-tags .tag,
+  .combo-tags .done-mark { font-size: 11px; padding: 2px 6px; }
+}

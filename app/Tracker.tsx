@@ -31,6 +31,7 @@ type Project = {
   percent: number | null; // SQ-weighted average of its buildings
   included: number; // buildings counted (have SQ + elevations)
   total: number; // all buildings
+  bldgTotal?: number; // buildings that have elevations
 };
 type Building = {
   id: string;
@@ -97,10 +98,11 @@ const norm = (id: string) => id.replace(/-/g, "");
 
 /** Amenity = a building whose type isn't "Bldg Type N" / "Type N" (e.g. "Cabana", "Clubhouse"). */
 const isAmenity = (type?: string | null) => !!type && !/^(bldg\.?\s*)?type\b/i.test(type.trim());
-/** Building ✓: "✓ 2/8" once any of its elevations is reported today; greyed when all are done. */
-function doneMark(done: number, total: number): { mark?: string; done?: boolean } {
-  if (done === 0) return {};
-  return { mark: total > 0 ? `✓ ${Math.min(done, total)}/${total}` : "✓", done: total > 0 && done >= total };
+/** Count bubble: grey "0/8 elev." until something's reported today, then green "✓ 2/8 elev.". Row shades dark when all are done. */
+function countMark(done: number, total: number, unit: string): { mark?: string; markOn?: boolean; done?: boolean } {
+  if (total <= 0) return {};
+  const n = Math.min(done, total);
+  return { mark: `${n > 0 ? "✓ " : ""}${n}/${total} ${unit}`, markOn: n > 0, done: n >= total };
 }
 
 /** Local midnight today, as ISO (the "session" resets each day). */
@@ -190,7 +192,7 @@ export default function Tracker({
 
   // Today's reports by this supervisor (resets at local midnight).
   const [today, setToday] = useState<TodayReport[]>([]);
-  const [todayOpen, setTodayOpen] = useState(false); // Changes Today open/closed
+  const [todayOpen, setTodayOpen] = useState(true); // Changes Today open/closed
   const dayKey = new Date(now).toDateString(); // changes at midnight → reload
   const loadToday = useCallback(async () => {
     const r = await getJsonCached<{ reports: TodayReport[] }>(
@@ -237,6 +239,17 @@ export default function Tracker({
       const key = norm(r.buildingId);
       if (!map.has(key)) map.set(key, new Set());
       map.get(key)!.add(norm(r.elevationId));
+    }
+    return map;
+  }, [todayAll]);
+  // Projects: which buildings have a report today → "✓ 3/9 bldg." on the project.
+  const doneByProject = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const r of todayAll) {
+      if (!r.projectId || !r.buildingId) continue;
+      const key = norm(r.projectId);
+      if (!map.has(key)) map.set(key, new Set());
+      map.get(key)!.add(norm(r.buildingId));
     }
     return map;
   }, [todayAll]);
@@ -288,7 +301,6 @@ export default function Tracker({
   }, [elevationId]);
 
   const elevation = elevations.find((e) => e.id === elevationId) ?? null;
-  const building = buildings.find((b) => b.id === buildingId) ?? null;
   const project = projects.find((p) => p.id === projectId) ?? null;
   // What's saved right now. Going below it needs a reason.
   const current = elevation?.percent ?? 0;
@@ -524,8 +536,9 @@ export default function Tracker({
         id: p.id,
         label: p.name,
         tag: p.percent !== null ? `${p.percent}% completed` : "No progress yet",
+        ...countMark(doneByProject.get(norm(p.id))?.size ?? 0, p.bldgTotal ?? p.total, "bldg."),
       })),
-    [projects],
+    [projects, doneByProject],
   );
   const buildingOptions: Option[] = useMemo(
     () =>
@@ -535,7 +548,7 @@ export default function Tracker({
         label: isAmenity(b.type) ? b.type.trim() : b.number !== null ? `B${b.number}` : buildingLabel(b.name),
         middle: b.type && !isAmenity(b.type) ? b.type.replace(/^bldg\s+/i, "") : undefined,
         tag: b.percent !== null ? `${b.percent}% completed` : "No elevations",
-        ...doneMark(doneByBuilding.get(norm(b.id))?.size ?? 0, b.elevationCount),
+        ...countMark(doneByBuilding.get(norm(b.id))?.size ?? 0, b.elevationCount, "elev."),
       })),
     [buildings, doneByBuilding],
   );
@@ -768,13 +781,6 @@ export default function Tracker({
           disabled={loading === "projects"}
           emptyText="No project matches"
         />
-        {project && project.total > 0 && (
-          <div className="hint">
-            {project.included < project.total
-              ? `${project.included} of ${project.total} buildings have SQ and elevations`
-              : `${project.total} building${project.total === 1 ? "" : "s"}`}
-          </div>
-        )}
       </div>
 
       {projectId && (
@@ -793,13 +799,6 @@ export default function Tracker({
             loadingText="Loading buildings…"
             emptyText="No buildings linked to this project"
           />
-          {building && (
-            <div className="hint">
-              {building.sqCount > 0 && building.sqCount < building.elevationCount
-                ? `${building.sqCount} of ${building.elevationCount} elevations have SQ`
-                : `${building.elevationCount} elevation${building.elevationCount === 1 ? "" : "s"}`}
-            </div>
-          )}
         </div>
       )}
 

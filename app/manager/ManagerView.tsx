@@ -16,8 +16,8 @@ type Project = {
   included: number;
   total: number;
   lastReported: string | null;
-  elevDone: number;
-  elevTotal: number;
+  bldgDone: number; // buildings fully at 100%
+  bldgTotal: number; // buildings that have elevations
 };
 type Building = {
   id: string;
@@ -25,7 +25,7 @@ type Building = {
   type: string;
   number: number | null;
   elevationCount: number;
-  doneCount: number;
+  doneCount: number; // elevations at 100%
   percent: number | null;
   lastReported: string | null;
 };
@@ -103,21 +103,27 @@ function Progress({ percent }: { percent: number | null }) {
     </span>
   );
 }
+
+/** Green bubble: "✓ 3/6 bldg." or "✓ 2/8 elev." (at 100%). Hidden if there's nothing to count. */
+function CompleteMark({ done, total, unit }: { done?: number; total?: number; unit: string }) {
+  const d = done ?? 0;
+  const t = total ?? 0;
+  if (t === 0) return null;
+  return (
+    <span
+      className="complete-mark all"
+      title={`${d} of ${t} ${unit === "bldg." ? "buildings" : "elevations"} at 100%`}
+    >
+      ✓ {d}/{t} {unit}
+    </span>
+  );
+}
+
 /** Amenity = a building whose type isn't "Bldg Type N" / "Type N" (e.g. "Cabana", "Clubhouse"). */
 function isAmenity(type?: string | null): boolean {
   return !!type && !/^(bldg\.?\s*)?type\b/i.test(type.trim());
 }
-/** "✓ 5/8": elevations at 100% out of all. Green bubble when everything is complete. */
-function CompleteMark({ done, total }: { done?: number; total?: number }) {
-  const d = done ?? 0;
-  const t = total ?? 0;
-  const all = t > 0 && d >= t;
-  return (
-    <span className={`complete-mark${all ? " all" : ""}`} title={`${d} of ${t} elevations at 100%`}>
-      ✓ {d}/{t}
-    </span>
-  );
-}
+
 /** Amenities show their type ("Cabana"); others show "B1" from Bldg #, or the short name if Bldg # is empty. */
 function bldgCode(b: { name: string; number: number | null; type?: string }): string {
   if (isAmenity(b.type)) return b.type!.trim();
@@ -129,13 +135,13 @@ function bldgType(type: string): string {
   return type.replace(/^bldg\s+/i, "");
 }
 function shortName(name: string): string {
-  const parts = name.split(/\s+-\s*|\s*-\s+/).map((s) => s.trim()).filter(Boolean);
+  const parts = name
+    .split(/\s+-\s*|\s*-\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   return parts.length > 1 ? parts.slice(1).join(" - ") : name;
 }
-/** "Meridian Forty54 - Cabana - 5" → "Cabana 5" (project name and dashes removed) */
-function buildingLabel(name: string): string {
-  return shortName(name);
-}
+
 export default function ManagerView({ userName }: { userName: string }) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -340,105 +346,114 @@ export default function ManagerView({ userName }: { userName: string }) {
 
         {projectsOpen && (
           <>
-
-        <div className="toolbar">
-          <div className="chips" role="group" aria-label="Filter by division">
-            <button type="button" className={`chip-btn${division === "" ? " on" : ""}`} onClick={() => setDivision("")}>
-              All
-            </button>
-            {divisions.map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={`chip-btn${division === d ? " on" : ""}`}
-                onClick={() => setDivision(d)}
-              >
-                {d}
+            <div className="toolbar">
+              <div className="chips" role="group" aria-label="Filter by division">
+                <button
+                  type="button"
+                  className={`chip-btn${division === "" ? " on" : ""}`}
+                  onClick={() => setDivision("")}
+                >
+                  All
+                </button>
+                {divisions.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    className={`chip-btn${division === d ? " on" : ""}`}
+                    onClick={() => setDivision(d)}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="btn-tool" onClick={collapseAll} disabled={!anyOpen}>
+                ⊟ Collapse all
               </button>
-            ))}
-          </div>
-          <button type="button" className="btn-tool" onClick={collapseAll} disabled={!anyOpen}>
-            ⊟ Collapse all
-          </button>
-        </div>
+            </div>
 
-        {loadingProjects && <div className="hint">Loading projects…</div>}
-        {!loadingProjects && visibleProjects.length === 0 && <div className="hint">No active projects.</div>}
+            {loadingProjects && <div className="hint">Loading projects…</div>}
+            {!loadingProjects && visibleProjects.length === 0 && <div className="hint">No active projects.</div>}
 
-        <ul className="tree">
-          {visibleProjects.map((p) => (
-            <li key={p.id}>
-              <button type="button" className="tree-row level-1" onClick={() => toggleProject(p.id)}>
-                <span className="caret">{openProjects.has(p.id) ? "▾" : "▸"}</span>
-                <span className="tree-title">
-                  <span className="tree-name-text">{p.name}</span>
-                  {p.status && <span className="tag">{p.status}</span>}
-                  <span className="chip">
-                    {p.total} building{p.total === 1 ? "" : "s"}
-                  </span>
-                  <CompleteMark done={p.elevDone} total={p.elevTotal} />
-                </span>
-                <Progress percent={p.percent} />
-                <span className="tree-when">
-                  {p.lastReported ? `Last report ${timeAgo(p.lastReported, now)}` : "No reports yet"}
-                </span>
-              </button>
+            <ul className="tree">
+              {visibleProjects.map((p) => (
+                <li key={p.id}>
+                  <button type="button" className="tree-row level-1" onClick={() => toggleProject(p.id)}>
+                    <span className="caret">{openProjects.has(p.id) ? "▾" : "▸"}</span>
+                    <span className="tree-title">
+                      <span className="tree-name-text">{p.name}</span>
+                      {p.status && <span className="tag">{p.status}</span>}
+                      <span className="chip">
+                        {p.total} building{p.total === 1 ? "" : "s"}
+                      </span>
+                      <CompleteMark done={p.bldgDone} total={p.bldgTotal} unit="bldg." />
+                    </span>
+                    <Progress percent={p.percent} />
+                    <span className="tree-when">
+                      {p.lastReported ? `Last report ${timeAgo(p.lastReported, now)}` : "No reports yet"}
+                    </span>
+                  </button>
 
-              {openProjects.has(p.id) && (
-                <ul className="tree nested">
-                  {!buildingsBy[p.id] && <li className="hint">Loading buildings…</li>}
-                  {buildingsBy[p.id]?.length === 0 && <li className="hint">No buildings.</li>}
-                  {buildingsBy[p.id]?.map((b) => (
-                    <li key={b.id}>
-                      <button type="button" className="tree-row level-2" onClick={() => toggleBuilding(b.id)}>
-                        <span className="caret">{openBuildings.has(b.id) ? "▾" : "▸"}</span>
-                        <span className="tree-title" title={b.name}>
-                          <span className="tree-name-text">{bldgCode(b)}</span>
-                          {b.type && !isAmenity(b.type) && <span className="tag tag-soft">{bldgType(b.type)}</span>}
-                          <span className="chip">
-                            {b.elevationCount} elevation{b.elevationCount === 1 ? "" : "s"}
-                          </span>
-                          <CompleteMark done={b.doneCount} total={b.elevationCount} />
-                        </span>
-                        <Progress percent={b.percent} />
-                        <span className="tree-when">
-                          {b.lastReported ? `Last report ${timeAgo(b.lastReported, now)}` : "No reports yet"}
-                        </span>
-                      </button>
-
-                      {openBuildings.has(b.id) && (
-                        <ul className="tree nested">
-                          {!elevationsBy[b.id] && <li className="hint">Loading elevations…</li>}
-                          {elevationsBy[b.id]?.length === 0 && <li className="hint">No elevations.</li>}
-                          {elevationsBy[b.id]?.map((el) => (
-                            <li key={el.id} className="tree-row level-3 static">
-                              <span className="caret" />
-                              <span className="tree-title">
-                                <span className="tree-name-text">{el.code || el.name}</span>
-                              {(el.percent ?? 0) >= 100 && <span className="complete-mark all">✓ Complete</span>}
+                  {openProjects.has(p.id) && (
+                    <ul className="tree nested">
+                      {!buildingsBy[p.id] && <li className="hint">Loading buildings…</li>}
+                      {buildingsBy[p.id]?.length === 0 && <li className="hint">No buildings.</li>}
+                      {buildingsBy[p.id]?.map((b) => (
+                        <li key={b.id}>
+                          <button type="button" className="tree-row level-2" onClick={() => toggleBuilding(b.id)}>
+                            <span className="caret">{openBuildings.has(b.id) ? "▾" : "▸"}</span>
+                            <span className="tree-title" title={b.name}>
+                              <span className="tree-name-text">{bldgCode(b)}</span>
+                              {b.type && !isAmenity(b.type) && (
+                                <span className="tag tag-soft">{bldgType(b.type)}</span>
+                              )}
+                              <span className="chip">
+                                {b.elevationCount ?? 0} elevation{b.elevationCount === 1 ? "" : "s"}
                               </span>
-                              <Progress percent={el.percent ?? 0} />
-                              <span className="tree-when">
-                                {el.submittedBy
-                                  ? `${el.submittedBy}${el.lastEdited ? ` · ${timeAgo(el.lastEdited, now)}` : ""}`
-                                  : "Not reported yet"}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ul>
+                              <CompleteMark done={b.doneCount} total={b.elevationCount} unit="elev." />
+                            </span>
+                            <Progress percent={b.percent} />
+                            <span className="tree-when">
+                              {b.lastReported ? `Last report ${timeAgo(b.lastReported, now)}` : "No reports yet"}
+                            </span>
+                          </button>
+
+                          {openBuildings.has(b.id) && (
+                            <ul className="tree nested">
+                              {!elevationsBy[b.id] && <li className="hint">Loading elevations…</li>}
+                              {elevationsBy[b.id]?.length === 0 && <li className="hint">No elevations.</li>}
+                              {elevationsBy[b.id]?.map((el) => (
+                                <li key={el.id} className="tree-row level-3 static">
+                                  <span className="caret" />
+                                  <span className="tree-title">
+                                    <span className="tree-name-text">{el.code || el.name}</span>
+                                    {(el.percent ?? 0) >= 100 && (
+                                      <span className="complete-mark all">✓ Complete</span>
+                                    )}
+                                  </span>
+                                  <Progress percent={el.percent ?? 0} />
+                                  <span className="tree-when">
+                                    {el.submittedBy
+                                      ? `${el.submittedBy}${el.lastEdited ? ` · ${timeAgo(el.lastEdited, now)}` : ""}`
+                                      : "Not reported yet"}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
           </>
         )}
       </section>
+
       {/* ---------- Past Reports (recap) ---------- */}
       <PastReports />
+
       {/* ---------- History ---------- */}
       <section className="card">
         <button
@@ -455,145 +470,144 @@ export default function ManagerView({ userName }: { userName: string }) {
 
         {historyOpen && (
           <>
-
-        {historyEnabled && (
-          <div className="toolbar toolbar-end">
-            <button
-              type="button"
-              className="btn-tool"
-              onClick={() => setFilters(EMPTY_FILTERS)}
-              disabled={!hasFilters}
-            >
-              ✕ Clear filters
-            </button>
-          </div>
-        )}
-
-        {!historyEnabled ? (
-          <div className="hint">History isn&apos;t set up yet (NOTION_LOG_DB is missing).</div>
-        ) : (
-          <>
-            <div className="filters">
-              <label>
-                <span>Supervisor</span>
-                <select value={filters.supervisor} onChange={(e) => setFilter("supervisor", e.target.value)}>
-                  <option value="">All supervisors</option>
-                  {supervisors.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Project</span>
-                <select value={filters.projectId} onChange={(e) => setFilter("projectId", e.target.value)}>
-                  <option value="">All projects</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Building</span>
-                <select
-                  value={filters.buildingId}
-                  onChange={(e) => setFilter("buildingId", e.target.value)}
-                  disabled={!filters.projectId}
+            {historyEnabled && (
+              <div className="toolbar toolbar-end">
+                <button
+                  type="button"
+                  className="btn-tool"
+                  onClick={() => setFilters(EMPTY_FILTERS)}
+                  disabled={!hasFilters}
                 >
-                  <option value="">{filters.projectId ? "All buildings" : "Pick a project"}</option>
-                  {filterBuildings.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {bldgCode(b)}
-                      {b.type && !isAmenity(b.type) ? ` · ${bldgType(b.type)}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Elevation</span>
-                <select
-                  value={filters.elevationId}
-                  onChange={(e) => setFilter("elevationId", e.target.value)}
-                  disabled={!filters.buildingId}
-                >
-                  <option value="">{filters.buildingId ? "All elevations" : "Pick a building"}</option>
-                  {filterElevations.map((el) => (
-                    <option key={el.id} value={el.id}>
-                      {el.code || el.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>From</span>
-                <input type="date" value={filters.from} onChange={(e) => setFilter("from", e.target.value)} />
-              </label>
-              <label>
-                <span>To</span>
-                <input type="date" value={filters.to} onChange={(e) => setFilter("to", e.target.value)} />
-              </label>
-            </div>
-
-            <div className="feed">
-              {history.length === 0 && !loadingHistory && <div className="hint">No changes found.</div>}
-              {history.length > 0 && (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>When</th>
-                      <th>Elevation</th>
-                      <th>Change</th>
-                      <th>By</th>
-                      <th>Description</th>
-                      <th>Photos</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.map((h) => (
-                      <tr key={h.id}>
-                        <td className="nowrap">
-                          {formatWhen(h.at)}
-                          <div className="tree-sub">{timeAgo(h.at, now)}</div>
-                        </td>
-                        <td>{h.elevation}</td>
-                        <td>
-                          <span className="nowrap">
-                            {h.from ?? 0}% → <strong>{h.to ?? 0}%</strong>
-                            {(h.to ?? 0) < (h.from ?? 0) && <span className="down-flag"> ↓</span>}
-                          </span>
-                          {h.reason && <div className="tree-sub">{h.reason}</div>}
-                        </td>
-                        <td>{h.by}</td>
-                        <td className="history-desc">{h.description}</td>
-                        <td>
-                          {h.photos.length > 0 && (
-                            <div className="history-photos">
-                              {h.photos.map((url, i) => (
-                                <a key={i} href={url} target="_blank" rel="noreferrer" title="Open photo">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={url} alt={`Photo ${i + 1}`} loading="lazy" />
-                                </a>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-              {loadingHistory && <div className="hint">Loading…</div>}
-              {nextCursor && !loadingHistory && (
-                <button type="button" className="btn secondary" onClick={loadMore}>
-                  Load more
+                  ✕ Clear filters
                 </button>
-              )}
-            </div>
-          </>
-        )}
+              </div>
+            )}
+
+            {!historyEnabled ? (
+              <div className="hint">History isn&apos;t set up yet (NOTION_LOG_DB is missing).</div>
+            ) : (
+              <>
+                <div className="filters">
+                  <label>
+                    <span>Supervisor</span>
+                    <select value={filters.supervisor} onChange={(e) => setFilter("supervisor", e.target.value)}>
+                      <option value="">All supervisors</option>
+                      {supervisors.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Project</span>
+                    <select value={filters.projectId} onChange={(e) => setFilter("projectId", e.target.value)}>
+                      <option value="">All projects</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Building</span>
+                    <select
+                      value={filters.buildingId}
+                      onChange={(e) => setFilter("buildingId", e.target.value)}
+                      disabled={!filters.projectId}
+                    >
+                      <option value="">{filters.projectId ? "All buildings" : "Pick a project"}</option>
+                      {filterBuildings.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {bldgCode(b)}
+                          {b.type && !isAmenity(b.type) ? ` · ${bldgType(b.type)}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Elevation</span>
+                    <select
+                      value={filters.elevationId}
+                      onChange={(e) => setFilter("elevationId", e.target.value)}
+                      disabled={!filters.buildingId}
+                    >
+                      <option value="">{filters.buildingId ? "All elevations" : "Pick a building"}</option>
+                      {filterElevations.map((el) => (
+                        <option key={el.id} value={el.id}>
+                          {el.code || el.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>From</span>
+                    <input type="date" value={filters.from} onChange={(e) => setFilter("from", e.target.value)} />
+                  </label>
+                  <label>
+                    <span>To</span>
+                    <input type="date" value={filters.to} onChange={(e) => setFilter("to", e.target.value)} />
+                  </label>
+                </div>
+
+                <div className="feed">
+                  {history.length === 0 && !loadingHistory && <div className="hint">No changes found.</div>}
+                  {history.length > 0 && (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>When</th>
+                          <th>Elevation</th>
+                          <th>Change</th>
+                          <th>By</th>
+                          <th>Description</th>
+                          <th>Photos</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {history.map((h) => (
+                          <tr key={h.id}>
+                            <td className="nowrap">
+                              {formatWhen(h.at)}
+                              <div className="tree-sub">{timeAgo(h.at, now)}</div>
+                            </td>
+                            <td>{h.elevation}</td>
+                            <td>
+                              <span className="nowrap">
+                                {h.from ?? 0}% → <strong>{h.to ?? 0}%</strong>
+                                {(h.to ?? 0) < (h.from ?? 0) && <span className="down-flag"> ↓</span>}
+                              </span>
+                              {h.reason && <div className="tree-sub">{h.reason}</div>}
+                            </td>
+                            <td>{h.by}</td>
+                            <td className="history-desc">{h.description}</td>
+                            <td>
+                              {h.photos.length > 0 && (
+                                <div className="history-photos">
+                                  {h.photos.map((url, i) => (
+                                    <a key={i} href={url} target="_blank" rel="noreferrer" title="Open photo">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={url} alt={`Photo ${i + 1}`} loading="lazy" />
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {loadingHistory && <div className="hint">Loading…</div>}
+                  {nextCursor && !loadingHistory && (
+                    <button type="button" className="btn secondary" onClick={loadMore}>
+                      Load more
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </>
         )}
       </section>

@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
         name: readText(pg, b.name),
         type: readText(pg, b.type),
         number: readNumber(pg, b.number),
+        elevationCount: rows.length, // all elevations in this building
         doneCount: rows.filter((r) => r.percent >= 100).length, // elevations at 100%
         sqCount: bp.method === "weighted" ? bp.included : 0, // elevations that have SQ
         percent: bp.percent === null ? null : Math.round(bp.percent),

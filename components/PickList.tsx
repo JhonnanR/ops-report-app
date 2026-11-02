@@ -46,7 +46,9 @@ export default function PickList({
       >
         <span className="pick-label">{selected.label}</span>
         {(selected.mark || selected.done) && (
-          <span className="done-mark">{selected.mark ?? "✓ Done today"}</span>
+          <span className={`done-mark${selected.mark && !selected.markOn ? " off" : ""}`}>
+            {selected.mark ?? "✓ Done today"}
+          </span>
         )}
         <span className="pick-bubbles">
           {selected.middle && <span className="tag tag-soft">{selected.middle}</span>}
@@ -74,7 +76,9 @@ export default function PickList({
             }}
           >
             <span className="pick-label">{o.label}</span>
-            {(o.mark || o.done) && <span className="done-mark">{o.mark ?? "✓"}</span>}
+            {(o.mark || o.done) && (
+              <span className={`done-mark${o.mark && !o.markOn ? " off" : ""}`}>{o.mark ?? "✓"}</span>
+            )}
             {o.middle && (
               <span className="pick-middle">
                 <span className="tag tag-soft">{o.middle}</span>
