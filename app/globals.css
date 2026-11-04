@@ -504,3 +504,4 @@ input:disabled, select:disabled { background: #eef1f5; color: var(--muted); }
 @media (max-width: 400px) {
   .reason-list { grid-template-columns: 1fr; }
 }
+.tree-row.all-done { background: #e3e7ec; color: #4a5563; }
