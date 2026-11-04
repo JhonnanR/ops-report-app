@@ -36,6 +36,7 @@ type Elevation = {
   percent: number | null;
   submittedBy: string;
   lastEdited: string | null;
+  groupId?: string | null; // group that last worked on it
 };
 type HistoryRow = {
   id: string;
@@ -48,9 +49,11 @@ type HistoryRow = {
   reason: string;
   photos: string[];
   description: string;
+  groupId: string | null; // Worked by
 };
 type Filters = {
   supervisor: string;
+  groupId: string; // Worked by
   projectId: string;
   buildingId: string;
   elevationId: string;
@@ -58,7 +61,7 @@ type Filters = {
   to: string; // yyyy-mm-dd (local)
 };
 
-const EMPTY_FILTERS: Filters = { supervisor: "", projectId: "", buildingId: "", elevationId: "", from: "", to: "" };
+const EMPTY_FILTERS: Filters = { supervisor: "", groupId: "", projectId: "", buildingId: "", elevationId: "", from: "", to: "" };
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { cache: "no-store" });
@@ -216,6 +219,14 @@ export default function ManagerView({ userName }: { userName: string }) {
     return map;
   }, [todayReports]);
 
+  // Group names (Groups DB) → bubble on each elevation row
+  const [groupNames, setGroupNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    getJson<{ groups: { id: string; name: string }[] }>("/api/groups")
+      .then((d) => setGroupNames(Object.fromEntries(d.groups.map((g) => [g.id, g.name]))))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     getJson<{ projects: Project[] }>("/api/projects")
       .then((d) => setProjects(d.projects))
@@ -297,6 +308,7 @@ export default function ManagerView({ userName }: { userName: string }) {
     (cursor?: string | null) => {
       const q = new URLSearchParams();
       if (filters.supervisor) q.set("supervisor", filters.supervisor);
+      if (filters.groupId) q.set("groupId", filters.groupId);
       if (filters.projectId) q.set("projectId", filters.projectId);
       if (filters.buildingId) q.set("buildingId", filters.buildingId);
       if (filters.elevationId) q.set("elevationId", filters.elevationId);
@@ -502,6 +514,9 @@ export default function ManagerView({ userName }: { userName: string }) {
                                   <span className="caret" />
                                   <span className="tree-title">
                                     <span className="tree-name-text">{el.code || el.name}</span>
+                                    {el.groupId && groupNames[norm(el.groupId)] && (
+                                      <span className="tag tag-soft">{groupNames[norm(el.groupId)]}</span>
+                                    )}
                                     {doneElevations.has(norm(el.id)) && (
                                       <span className="done-mark" title={`Reported in the last ${CHECK_DAYS} days`}>
                                         ✓
@@ -578,6 +593,19 @@ export default function ManagerView({ userName }: { userName: string }) {
                     </select>
                   </label>
                   <label>
+                    <span>Worked by</span>
+                    <select value={filters.groupId} onChange={(e) => setFilter("groupId", e.target.value)}>
+                      <option value="">All groups</option>
+                      {Object.entries(groupNames)
+                        .sort((a, z) => a[1].localeCompare(z[1], undefined, { numeric: true }))
+                        .map(([id, name]) => (
+                          <option key={id} value={id}>
+                            {name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
                     <span>Project</span>
                     <select value={filters.projectId} onChange={(e) => setFilter("projectId", e.target.value)}>
                       <option value="">All projects</option>
@@ -639,6 +667,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                           <th>Elevation</th>
                           <th>Change</th>
                           <th>By</th>
+                          <th>Worked by</th>
                           <th>Description</th>
                           <th>Photos</th>
                         </tr>
@@ -659,6 +688,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                               {h.reason && <div className="tree-sub">{h.reason}</div>}
                             </td>
                             <td>{h.by}</td>
+                            <td className="nowrap">{h.groupId ? (groupNames[h.groupId] ?? "") : ""}</td>
                             <td className="history-desc">{h.description}</td>
                             <td>
                               {h.photos.length > 0 && (

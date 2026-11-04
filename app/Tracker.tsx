@@ -49,9 +49,12 @@ type Elevation = {
   percent: number | null;
   submittedBy: string;
   lastEdited: string | null;
+  groupId?: string | null; // group that last worked on it
 };
+type Group = { id: string; name: string; members: string; active: boolean };
 
 const STEP = 5;
+const LAST_GROUP_KEY = "ops-report:last-group"; // remembers the group picked last on this phone
 const MAX_PHOTOS = 3;
 
 type Photo = { key: string; blob: Blob; preview: string };
@@ -311,6 +314,13 @@ export default function Tracker({
   const [reasonOther, setReasonOther] = useState("");
   const [description, setDescription] = useState(""); // optional note with the report
 
+  // Group (crew) who did the work. The list comes from the Groups DB in Notion.
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [groupsEnabled, setGroupsEnabled] = useState(false);
+  const [groupId, setGroupId] = useState("");
+  const groupName = (id?: string | null) => (id ? groups.find((g) => g.id === norm(id))?.name ?? "" : "");
+  const activeGroups = groups.filter((g) => g.active);
+
   // Photos for this save (at least 1, up to 3)
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -352,6 +362,12 @@ export default function Tracker({
   useEffect(() => {
     getJsonCached<{ reasons: Reason[] }>("/api/reasons", "reasons")
       .then((r) => setReasons(r.data.reasons))
+      .catch(() => {});
+    getJsonCached<{ groups: Group[]; enabled: boolean }>("/api/groups", "groups")
+      .then((r) => {
+        setGroups(r.data.groups);
+        setGroupsEnabled(r.data.enabled);
+      })
       .catch(() => {});
   }, []);
 
@@ -440,6 +456,15 @@ export default function Tracker({
     setReasonOther("");
     setDescription("");
     clearPhotos();
+    // Group: the one already on this elevation, otherwise the last one picked on this phone.
+    let last = "";
+    try {
+      last = localStorage.getItem(LAST_GROUP_KEY) ?? "";
+    } catch {
+      /* ignore */
+    }
+    const onElevation = elevation?.groupId ? norm(elevation.groupId) : "";
+    setGroupId(onElevation || last);
   }, [elevation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Reload everything shown (after reports were sent, or the connection came back). */
@@ -453,9 +478,17 @@ export default function Tracker({
   }, [loadProjects, loadBuildings, loadElevations, loadToday, projectId, buildingId]);
 
   /** Show a saved report on this phone right away (new %, ✓ marks), and keep it in the saved list. */
-  function applyLocally(elevId: string, bid: string | null, pct: number) {
+  function applyLocally(elevId: string, bid: string | null, pct: number, gid?: string) {
     const update = (e: Elevation) =>
-      e.id === elevId ? { ...e, percent: pct, submittedBy: supervisorName, lastEdited: new Date().toISOString() } : e;
+      e.id === elevId
+        ? {
+            ...e,
+            percent: pct,
+            submittedBy: supervisorName,
+            lastEdited: new Date().toISOString(),
+            groupId: gid || e.groupId || null,
+          }
+        : e;
     setElevations((list) => list.map(update));
     if (bid) {
       const key = `elevations:${bid}`;
@@ -557,10 +590,11 @@ export default function Tracker({
       elevations.map((e) => ({
         id: e.id,
         label: e.code || e.name,
+        middle: groupName(e.groupId) || undefined, // group that last worked on it
         tag: `Currently ${e.percent ?? 0}%`,
         done: doneToday.has(norm(e.id)),
       })),
-    [elevations, doneToday],
+    [elevations, doneToday, groups], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const isDecrease = elevation !== null && pctText !== "" && percent < current;
@@ -572,8 +606,16 @@ export default function Tracker({
     : reasonChoice;
   const reasonOk = !isDecrease || reasonText !== "";
   const photosOk = photos.length > 0;
+  const groupOk = !groupsEnabled || groupId !== "";
   const canSave =
-    elevation !== null && pctText !== "" && percent !== current && reasonOk && photosOk && !saving && !photoBusy;
+    elevation !== null &&
+    pctText !== "" &&
+    percent !== current &&
+    reasonOk &&
+    photosOk &&
+    groupOk &&
+    !saving &&
+    !photoBusy;
 
   async function save() {
     if (!elevation || !canSave) return;
@@ -587,6 +629,7 @@ export default function Tracker({
       percent,
       photos: photos.map((p) => p.blob),
       description: description.trim() || undefined,
+      groupId: groupId || undefined,
       ...(isDecrease
         ? {
             reason: reasonChoice,
@@ -596,6 +639,11 @@ export default function Tracker({
         : {}),
     };
     const label = elevation.code || elevation.name;
+    try {
+      if (groupId) localStorage.setItem(LAST_GROUP_KEY, groupId);
+    } catch {
+      /* ignore */
+    }
     const clearForm = () => {
       setReasonChoice("");
       setReasonOther("");
@@ -616,6 +664,7 @@ export default function Tracker({
         reasonId: payload.reasonId,
         reasonOther: payload.reasonOther,
         description: payload.description,
+        groupId: payload.groupId,
         photos: payload.photos,
         project: project?.name ?? "",
         projectId: projectId,
@@ -624,7 +673,7 @@ export default function Tracker({
         elevation: label,
         status: "waiting",
       });
-      applyLocally(payload.elevationId, buildingId, payload.percent);
+      applyLocally(payload.elevationId, buildingId, payload.percent, payload.groupId);
       await reloadOutbox();
       clearForm();
       if (why === "signed-out") setSignedOut(true);
@@ -639,7 +688,7 @@ export default function Tracker({
 
     try {
       await sendReport(payload);
-      applyLocally(payload.elevationId, buildingId, payload.percent);
+      applyLocally(payload.elevationId, buildingId, payload.percent, payload.groupId);
       // Refresh project % and building % (keeps the current selection).
       await Promise.all([loadProjects(), projectId ? loadBuildings(projectId) : null, loadToday()]).catch(
         () => {},
@@ -908,6 +957,7 @@ export default function Tracker({
               {elevation.lastEdited ? ` · ${timeAgo(elevation.lastEdited, now)}` : ""}
             </div>
           )}
+
           {isDecrease && (
             <div className="reason-box">
               <div className="reason-title">
@@ -976,6 +1026,31 @@ export default function Tracker({
                 {photos.length >= MAX_PHOTOS && <div className="photo-max">Max {MAX_PHOTOS} photos added</div>}
               </div>
               {!photosOk && <div className="hint photo-required">Add at least 1 photo to save this report.</div>}
+            </div>
+          )}
+          {groupsEnabled && (
+            <div className="group-box">
+              <label className="field" htmlFor="report-group">
+                Worked By
+              </label>
+              <select
+                id="report-group"
+                value={groupId}
+                onChange={(e) => setGroupId(e.target.value)}
+                disabled={saving}
+              >
+                <option value="">Pick a group…</option>
+                {activeGroups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+                {/* keep the elevation's current group visible even if it was made inactive */}
+                {groupId && !activeGroups.some((g) => g.id === groupId) && groupName(groupId) && (
+                  <option value={groupId}>{groupName(groupId)}</option>
+                )}
+              </select>
+              {!groupOk && <div className="hint photo-required">Pick a group to save this report.</div>}
             </div>
           )}
           {elevation && (

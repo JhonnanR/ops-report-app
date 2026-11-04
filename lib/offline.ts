@@ -101,6 +101,7 @@ export type OutboxItem = {
   reasonId?: string;
   reasonOther?: string;
   description?: string;
+  groupId?: string; // group (crew) who did the work
   photos: Blob[];
   // labels for showing it in Changes Today while it waits
   project: string;
@@ -193,6 +194,7 @@ export type ReportPayload = {
   percent: number;
   photos: Blob[];
   description?: string;
+  groupId?: string;
   reason?: string;
   reasonId?: string;
   reasonOther?: string;
@@ -226,6 +228,7 @@ export async function sendReport(r: ReportPayload): Promise<{ buildingPercent?: 
         percent: r.percent,
         photoIds,
         description: r.description || undefined,
+        groupId: r.groupId || undefined,
         reason: r.reason || undefined,
         reasonId: r.reasonId || undefined,
         reasonOther: r.reasonOther || undefined,
@@ -259,6 +262,7 @@ export async function flushOutbox(onProgress?: (done: number, total: number) => 
         percent: item.percent,
         photos: item.photos,
         description: item.description,
+        groupId: item.groupId,
         reason: item.reason,
         reasonId: item.reasonId,
         reasonOther: item.reasonOther,

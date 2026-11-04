@@ -33,7 +33,8 @@
     "project": "AF%3DO",
     "sq": "AHPM",
     "elevCode": "YD%5Ba",
-    "latestPhoto": "DiaX"
+    "latestPhoto": "DiaX",
+    "group": "Group"
   },
   "log": {
     "title": "title",
@@ -50,6 +51,12 @@
     "photos": "q%3Fh%3D",
     "reportNo": "oQq%3D",
     "description": "zXHp",
-    "reportId": "%60ADt"
+    "reportId": "%60ADt",
+    "group": "Group"
+  },
+  "groups": {
+    "name": "title",
+    "members": "gAH%3B",
+    "active": "FwC%5B"
   }
 }

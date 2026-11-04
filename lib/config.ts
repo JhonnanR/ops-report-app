@@ -30,6 +30,10 @@ export const config = {
   get logDb(): string | null {
     return process.env.NOTION_LOG_DB || null;
   },
+  /** Groups DB (crews who do the work). Optional: if not set, the Group dropdown is hidden. */
+  get groupsDb(): string | null {
+    return process.env.NOTION_GROUPS_DB || null;
+  },
   get showTestElevations() {
     return process.env.SHOW_TEST_ELEVATIONS === "true";
   },
@@ -50,4 +54,5 @@ export const props = {
   buildings: propsJson.buildings,
   elevations: propsJson.elevations,
   log: propsJson.log,
+  groups: propsJson.groups,
 };

@@ -48,6 +48,8 @@ export async function POST(req: NextRequest) {
   // Unique ID from the phone, so a report sent twice (weak signal / offline outbox) is only saved once.
   const reportId =
     typeof body.reportId === "string" && /^[0-9a-f-]{32,36}$/i.test(body.reportId) ? body.reportId : "";
+  // Group (crew) who did the work, from the Groups DB.
+  const groupId = isNotionId(body.groupId) ? body.groupId : "";
   // When the report was made (offline reports are sent later).
   const reportedAt = reportTime(body.changedAt);
   // Photo upload IDs from /api/upload (1–3, required)
@@ -68,6 +70,11 @@ export async function POST(req: NextRequest) {
   // A photo is required with every report.
   if (photosEnabled && photoIds.length === 0) {
     return NextResponse.json({ error: "Add at least 1 photo to save this report." }, { status: 400 });
+  }
+
+  // The group who did the work is required once the Groups DB is set up.
+  if (config.groupsDb && !groupId) {
+    return NextResponse.json({ error: "Pick the group who did the work." }, { status: 400 });
   }
 
   // Already saved? (the phone sent it again after a dropped connection) → just say OK.
@@ -110,6 +117,8 @@ export async function POST(req: NextRequest) {
     [e.completed]: { checkbox: percent === 100 },
     [e.submittedBy]: { rich_text: [{ text: { content: session.name } }] },
     [e.submitterEmail]: { email: session.email || null },
+    // Group that last worked on this elevation
+    ...(groupId && e.group ? { [e.group]: { relation: [{ id: groupId }] } } : {}),
     ...(e.latestPhoto && photoIds.length
       ? {
           [e.latestPhoto]: {
@@ -147,6 +156,8 @@ export async function POST(req: NextRequest) {
         [l.changedBy]: { rich_text: [{ text: { content: session.name } }] },
         [l.changedByEmail]: { email: session.email || null },
         [l.changedAt]: { date: { start: reportedAt } },
+        // Group who did the work
+        ...(groupId && l.group ? { [l.group]: { relation: [{ id: groupId }] } } : {}),
         // Unique report ID (duplicate check)
         ...(reportId && l.reportId ? { [l.reportId]: { rich_text: [{ text: { content: reportId } }] } } : {}),
         // Reason (Notion Select) + Other Reason (Text, only when "Other" was picked)

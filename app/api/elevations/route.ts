@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { config, props } from "@/lib/config";
-import { isNotionId, queryAll, readNumber, readText } from "@/lib/notion";
+import { isNotionId, queryAll, readNumber, readRelationIds, readText } from "@/lib/notion";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +26,8 @@ export async function GET(req: NextRequest) {
         code: readText(pg, e.elevCode) || readText(pg, e.code),
         percent: pct === null ? null : Math.round(pct * 100),
         submittedBy: readText(pg, e.submittedBy),
+        // Group that last worked on it (Groups DB relation)
+        groupId: e.group ? (readRelationIds(pg, e.group)[0] ?? "").replace(/-/g, "") || null : null,
         lastEdited: pg.last_edited_time ?? null,
       };
     })

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/manager/history
- *   ?projectId= &buildingId= &elevationId= &supervisor= &from=ISO &to=ISO &cursor=
+ *   ?projectId= &buildingId= &elevationId= &supervisor= &groupId= &from=ISO &to=ISO &cursor=
  * Newest first, 50 at a time. Manager roles only.
  */
 export async function GET(req: NextRequest) {
@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
   const buildingId = q.get("buildingId");
   const elevationId = q.get("elevationId");
   const supervisor = q.get("supervisor")?.trim();
+  const groupId = q.get("groupId");
   const from = q.get("from");
   const to = q.get("to");
 
@@ -44,6 +45,8 @@ export async function GET(req: NextRequest) {
     });
   }
   if (supervisor) filters.push({ property: l.changedBy, rich_text: { equals: supervisor } });
+  // Worked by (group who did the work)
+  if (isNotionId(groupId) && l.group) filters.push({ property: l.group, relation: { contains: groupId } });
   if (from && !Number.isNaN(Date.parse(from))) filters.push({ property: l.changedAt, date: { on_or_after: from } });
   if (to && !Number.isNaN(Date.parse(to))) filters.push({ property: l.changedAt, date: { before: to } });
 
@@ -59,7 +62,7 @@ export async function GET(req: NextRequest) {
   const pct = (n: number | null) => (n === null ? null : Math.round(n * 100));
   const history = results.map((pg) => ({
     id: pg.id,
-    elevation: readText(pg, l.title).replace(/\s-\sRep\s\d+$/, ""), // drop " - Rep #" for display
+    elevation: readText(pg, l.title).replace(/\s-\sRep\s\d+$/, ""), // "[A203-3] - Rep 2" → "[A203-3]"
     projectId: readRelationIds(pg, l.project)[0] ?? null,
     from: pct(readNumber(pg, l.from)),
     to: pct(readNumber(pg, l.to)),
@@ -72,6 +75,7 @@ export async function GET(req: NextRequest) {
     })(),
     photos: l.photos ? readFiles(pg, l.photos).map((f) => f.url) : [],
     description: l.description ? readText(pg, l.description) : "",
+    groupId: l.group ? (readRelationIds(pg, l.group)[0] ?? "").replace(/-/g, "") || null : null,
   }));
 
   return NextResponse.json({ history, nextCursor, enabled: true });
