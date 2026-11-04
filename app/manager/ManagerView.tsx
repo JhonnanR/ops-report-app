@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { timeAgo } from "@/lib/timeAgo";
 import PastReports from "./PastReports";
@@ -104,21 +104,37 @@ function Progress({ percent }: { percent: number | null }) {
   );
 }
 
-/** Same look as the Report tab: grey "0/9 bldg." when none, green "✓ 3/9 bldg." once at least one is done. */
-function CompleteMark({ done, total, unit }: { done?: number; total?: number; unit: string }) {
-  const d = done ?? 0;
+/** How many days of reports count toward the ✓ (today + the days before it). Change this one number to adjust. */
+const CHECK_DAYS = 4;
+
+/** Same bubble as the Report tab: grey "0/8 elev." until something's reported, then green "✓ 2/8 elev.". */
+function CountMark({ done, total, unit }: { done: number; total?: number; unit: string }) {
   const t = total ?? 0;
-  if (t === 0) return null;
+  if (t <= 0) return null;
+  const n = Math.min(done, t);
   return (
     <span
-      className={`done-mark${d > 0 ? "" : " off"}`}
-      title={`${d} of ${t} ${unit === "bldg." ? "buildings" : "elevations"} at 100%`}
+      className={`done-mark${n > 0 ? "" : " off"}`}
+      title={`${n} of ${t} ${unit === "bldg." ? "buildings" : "elevations"} reported in the last ${CHECK_DAYS} days`}
     >
-      {d > 0 ? "✓ " : ""}
-      {d}/{t} {unit}
+      {n > 0 ? "✓ " : ""}
+      {n}/{t} {unit}
     </span>
   );
 }
+
+/** Local midnight at the start of the check window (CHECK_DAYS days, counting today), as ISO. */
+function startOfWindow(): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - (CHECK_DAYS - 1));
+  return d.toISOString();
+}
+
+/** Page IDs sometimes come with dashes, sometimes without. */
+const norm = (id: string) => id.replace(/-/g, "");
+
+type TodayReport = { elevationId: string | null; buildingId: string | null; projectId: string | null };
 
 /** Amenity = a building whose type isn't "Bldg Type N" / "Type N" (e.g. "Cabana", "Clubhouse"). */
 function isAmenity(type?: string | null): boolean {
@@ -162,6 +178,43 @@ export default function ManagerView({ userName }: { userName: string }) {
   const [projectsOpen, setProjectsOpen] = useState(true); // Projects section open/closed
   const [buildingsBy, setBuildingsBy] = useState<Record<string, Building[]>>({});
   const [elevationsBy, setElevationsBy] = useState<Record<string, Elevation[]>>({});
+
+  // Reports from every supervisor in the last CHECK_DAYS days → "✓ 2/8 elev." / "✓ 3/9 bldg." / ✓ on elevations.
+  const [todayReports, setTodayReports] = useState<TodayReport[]>([]);
+  const dayKey = new Date(now).toDateString();
+  useEffect(() => {
+    const load = () =>
+      getJson<{ reports: TodayReport[] }>(`/api/manager/recent?since=${encodeURIComponent(startOfWindow())}`)
+        .then((d) => setTodayReports(d.reports))
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 5 * 60_000); // refresh every 5 minutes
+    return () => clearInterval(t);
+  }, [dayKey]);
+  const doneElevations = useMemo(
+    () => new Set(todayReports.map((r) => (r.elevationId ? norm(r.elevationId) : "")).filter(Boolean)),
+    [todayReports],
+  );
+  const doneByBuilding = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const r of todayReports) {
+      if (!r.buildingId || !r.elevationId) continue;
+      const key = norm(r.buildingId);
+      if (!map.has(key)) map.set(key, new Set());
+      map.get(key)!.add(norm(r.elevationId));
+    }
+    return map;
+  }, [todayReports]);
+  const doneByProject = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const r of todayReports) {
+      if (!r.projectId || !r.buildingId) continue;
+      const key = norm(r.projectId);
+      if (!map.has(key)) map.set(key, new Set());
+      map.get(key)!.add(norm(r.buildingId));
+    }
+    return map;
+  }, [todayReports]);
 
   useEffect(() => {
     getJson<{ projects: Project[] }>("/api/projects")
@@ -378,7 +431,13 @@ export default function ManagerView({ userName }: { userName: string }) {
             <ul className="tree">
               {visibleProjects.map((p) => (
                 <li key={p.id}>
-                  <button type="button" className="tree-row level-1" onClick={() => toggleProject(p.id)}>
+                  <button
+                    type="button"
+                    className={`tree-row level-1${
+                      p.bldgTotal > 0 && (doneByProject.get(norm(p.id))?.size ?? 0) >= p.bldgTotal ? " all-done" : ""
+                    }`}
+                    onClick={() => toggleProject(p.id)}
+                  >
                     <span className="caret">{openProjects.has(p.id) ? "▾" : "▸"}</span>
                     <span className="tree-title">
                       <span className="tree-name-text">{p.name}</span>
@@ -386,7 +445,7 @@ export default function ManagerView({ userName }: { userName: string }) {
                       <span className="chip">
                         {p.total} building{p.total === 1 ? "" : "s"}
                       </span>
-                      <CompleteMark done={p.bldgDone} total={p.bldgTotal} unit="bldg." />
+                      <CountMark done={doneByProject.get(norm(p.id))?.size ?? 0} total={p.bldgTotal} unit="bldg." />
                     </span>
                     <Progress percent={p.percent} />
                     <span className="tree-when">
@@ -400,7 +459,16 @@ export default function ManagerView({ userName }: { userName: string }) {
                       {buildingsBy[p.id]?.length === 0 && <li className="hint">No buildings.</li>}
                       {buildingsBy[p.id]?.map((b) => (
                         <li key={b.id}>
-                          <button type="button" className="tree-row level-2" onClick={() => toggleBuilding(b.id)}>
+                          <button
+                            type="button"
+                            className={`tree-row level-2${
+                              b.elevationCount > 0 &&
+                              (doneByBuilding.get(norm(b.id))?.size ?? 0) >= b.elevationCount
+                                ? " all-done"
+                                : ""
+                            }`}
+                            onClick={() => toggleBuilding(b.id)}
+                          >
                             <span className="caret">{openBuildings.has(b.id) ? "▾" : "▸"}</span>
                             <span className="tree-title" title={b.name}>
                               <span className="tree-name-text">{bldgCode(b)}</span>
@@ -410,7 +478,11 @@ export default function ManagerView({ userName }: { userName: string }) {
                               <span className="chip">
                                 {b.elevationCount ?? 0} elevation{b.elevationCount === 1 ? "" : "s"}
                               </span>
-                              <CompleteMark done={b.doneCount} total={b.elevationCount} unit="elev." />
+                              <CountMark
+                                done={doneByBuilding.get(norm(b.id))?.size ?? 0}
+                                total={b.elevationCount}
+                                unit="elev."
+                              />
                             </span>
                             <Progress percent={b.percent} />
                             <span className="tree-when">
@@ -423,12 +495,17 @@ export default function ManagerView({ userName }: { userName: string }) {
                               {!elevationsBy[b.id] && <li className="hint">Loading elevations…</li>}
                               {elevationsBy[b.id]?.length === 0 && <li className="hint">No elevations.</li>}
                               {elevationsBy[b.id]?.map((el) => (
-                                <li key={el.id} className="tree-row level-3 static">
+                                <li
+                                  key={el.id}
+                                  className={`tree-row level-3 static${doneElevations.has(norm(el.id)) ? " all-done" : ""}`}
+                                >
                                   <span className="caret" />
                                   <span className="tree-title">
                                     <span className="tree-name-text">{el.code || el.name}</span>
-                                    {(el.percent ?? 0) >= 100 && (
-                                      <span className="complete-mark all">✓ Complete</span>
+                                    {doneElevations.has(norm(el.id)) && (
+                                      <span className="done-mark" title={`Reported in the last ${CHECK_DAYS} days`}>
+                                        ✓
+                                      </span>
                                     )}
                                   </span>
                                   <Progress percent={el.percent ?? 0} />
