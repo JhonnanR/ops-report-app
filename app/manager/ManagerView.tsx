@@ -104,17 +104,18 @@ function Progress({ percent }: { percent: number | null }) {
   );
 }
 
-/** Green bubble: "✓ 3/6 bldg." or "✓ 2/8 elev." (at 100%). Hidden if there's nothing to count. */
+/** Same look as the Report tab: grey "0/9 bldg." when none, green "✓ 3/9 bldg." once at least one is done. */
 function CompleteMark({ done, total, unit }: { done?: number; total?: number; unit: string }) {
   const d = done ?? 0;
   const t = total ?? 0;
   if (t === 0) return null;
   return (
     <span
-      className="complete-mark all"
+      className={`done-mark${d > 0 ? "" : " off"}`}
       title={`${d} of ${t} ${unit === "bldg." ? "buildings" : "elevations"} at 100%`}
     >
-      ✓ {d}/{t} {unit}
+      {d > 0 ? "✓ " : ""}
+      {d}/{t} {unit}
     </span>
   );
 }
