@@ -15,14 +15,14 @@ export async function GET() {
 
   const p = props.projects;
   const b = props.buildings;
-  const e = props.elevations;
 
   const [projectPages, elevationPages, buildingPages] = await Promise.all([
     queryAll(config.projectsDb, {
       filter: {
         and: [
           { property: p.division, multi_select: { does_not_contain: HIDE_DIVISION } },
-          ...HIDE_STATUSES.map((s) => ({ property: p.status, select: { does_not_equal: s } })),
+          // Status is a Notion "Status" column in Project DB v2
+          ...HIDE_STATUSES.map((s) => ({ property: p.status, status: { does_not_equal: s } })),
         ],
       },
       sorts: [{ property: p.name, direction: "ascending" }],
@@ -31,11 +31,8 @@ export async function GET() {
     queryAll(config.buildingsDb, {}, 100),
   ]);
 
-  // Projects that have at least one elevation (directly, or through one of their buildings).
+  // Projects that have at least one elevation (through their buildings).
   const withElevations = new Set<string>();
-  for (const el of elevationPages) {
-    readRelationIds(el, e.project).forEach((id) => withElevations.add(norm(id)));
-  }
 
   // Building % (weighted by elevation SQ, or simple average) grouped by project, with building SQ.
   const elevByBuilding = elevationsByBuilding(elevationPages);

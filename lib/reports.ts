@@ -5,13 +5,14 @@ import { getPage, readDate, readNumber, readRelationIds, readText, type NotionPa
 /** Page IDs sometimes come with dashes, sometimes without. */
 export const norm = (id: string) => id.replace(/-/g, "");
 
-/** Amenities show their type ("Cabana"); others "B" + Bldg #, or "B" + the building's number from its name. */
-export function shortBuilding(name: string, number: number | null, type = ""): string {
-  if (type && !/^(bldg\.?\s*)?type\b/i.test(type.trim())) return type.trim();
+/** "Meridian Forty54 - Bldg 1 - 3" → "B1-3"; falls back to "B<Bldg #>" or the short name. */
+export function shortBuilding(name: string, number: number | null): string {
+  const parts = name.split(/\s+-\s*|\s*-\s+/).map((s) => s.trim()).filter(Boolean);
+  const rest = (parts.length > 1 ? parts.slice(1) : parts).join(" - ");
+  const m = rest.match(/^bldg\.?\s*(.+)$/i);
+  if (m) return `B${m[1].replace(/\s*-\s*/g, "-").replace(/\s+/g, "")}`;
   if (number !== null) return `B${number}`;
-  const parts = name.split(/\s*-\s*/).map((s) => s.trim()).filter(Boolean);
-  const first = (parts.length > 1 ? parts[1] : parts[0]) ?? name;
-  return first.replace(/^bldg\.?\s*/i, "B").replace(/\s+/g, "");
+  return rest || name;
 }
 
 /** Loads each page once, even if many reports point to it. */
@@ -54,15 +55,14 @@ export async function describeReports(logs: NotionPage[]): Promise<ReportRow[]> 
     pg,
     elevationId: readRelationIds(pg, l.elevation)[0] ?? null,
     buildingId: readRelationIds(pg, l.building)[0] ?? null,
-    projectId: readRelationIds(pg, l.project)[0] ?? null,
   }));
 
   const [buildings, elevations] = await Promise.all([
     loadPages(rows.map((r) => r.buildingId ?? "")),
     loadPages(rows.map((r) => r.elevationId ?? "")),
   ]);
+  // Project: always taken from the building (Buildings → Project v2).
   const projectOf = (r: (typeof rows)[number]) => {
-    if (r.projectId) return r.projectId;
     const bp = r.buildingId ? buildings.get(norm(r.buildingId)) : undefined;
     return bp ? (readRelationIds(bp, b.project)[0] ?? null) : null;
   };
@@ -81,7 +81,7 @@ export async function describeReports(logs: NotionPage[]): Promise<ReportRow[]> 
       buildingId: r.buildingId ? norm(r.buildingId) : null,
       projectId: projectId ? norm(projectId) : null,
       project: pp ? readText(pp, props.projects.name) : "Other",
-      building: bp ? shortBuilding(readText(bp, b.name), readNumber(bp, b.number), readText(bp, b.type)) : "",
+      building: bp ? shortBuilding(readText(bp, b.name), readNumber(bp, b.number)) : "",
       elevation: ep ? readText(ep, e.elevCode) || readText(ep, e.code) || fallback : fallback,
       from: pct(readNumber(r.pg, l.from)),
       to: pct(readNumber(r.pg, l.to)),

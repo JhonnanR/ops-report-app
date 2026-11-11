@@ -96,12 +96,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not an elevation record" }, { status: 400 });
   }
   const buildingIds = readRelationIds(page, e.building);
-  let projectIds = readRelationIds(page, e.project);
-  // Many elevations don't have Project filled in. Fall back to the building's project.
-  if (projectIds.length === 0 && buildingIds.length) {
-    const buildingPages = await Promise.all(buildingIds.map((id) => getPage(id).catch(() => null)));
-    projectIds = [...new Set(buildingPages.flatMap((bp) => (bp ? readRelationIds(bp, b.project) : [])))];
-  }
+
 
   // Progress can go down, but only with a reason.
   const current = Math.round((readNumber(page, e.percent) ?? 0) * 100);
@@ -150,7 +145,6 @@ export async function POST(req: NextRequest) {
         ...(l.reportNo ? { [l.reportNo]: { number: repNo } } : {}),
         [l.elevation]: { relation: [{ id: elevationId }] },
         [l.building]: { relation: buildingIds.map((id) => ({ id })) },
-        [l.project]: { relation: projectIds.map((id) => ({ id })) },
         [l.from]: { number: current / 100 },
         [l.to]: { number: percent / 100 },
         [l.changedBy]: { rich_text: [{ text: { content: session.name } }] },

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/manager/history
- *   ?projectId= &buildingId= &elevationId= &supervisor= &groupId= &from=ISO &to=ISO &cursor=
+ *   ?projectId= &buildingId= &elevationId= &supervisor= &from=ISO &to=ISO &cursor=
  * Newest first, 50 at a time. Manager roles only.
  */
 export async function GET(req: NextRequest) {
@@ -22,7 +22,6 @@ export async function GET(req: NextRequest) {
   const buildingId = q.get("buildingId");
   const elevationId = q.get("elevationId");
   const supervisor = q.get("supervisor")?.trim();
-  const groupId = q.get("groupId");
   const from = q.get("from");
   const to = q.get("to");
 
@@ -37,15 +36,15 @@ export async function GET(req: NextRequest) {
     const buildings = await queryAll(config.buildingsDb, {
       filter: { property: props.buildings.project, relation: { contains: projectId } },
     });
+    // Reports are matched through the project's buildings (Buildings → Project v2).
+    if (buildings.length === 0) return NextResponse.json({ history: [], nextCursor: null, enabled: true });
     filters.push({
-      or: [
-        { property: l.project, relation: { contains: projectId } },
-        ...buildings.slice(0, 90).map((bp) => ({ property: l.building, relation: { contains: bp.id } })),
-      ],
+      or: buildings.slice(0, 100).map((bp) => ({ property: l.building, relation: { contains: bp.id } })),
     });
   }
   if (supervisor) filters.push({ property: l.changedBy, rich_text: { equals: supervisor } });
   // Worked by (group who did the work)
+  const groupId = q.get("groupId");
   if (isNotionId(groupId) && l.group) filters.push({ property: l.group, relation: { contains: groupId } });
   if (from && !Number.isNaN(Date.parse(from))) filters.push({ property: l.changedAt, date: { on_or_after: from } });
   if (to && !Number.isNaN(Date.parse(to))) filters.push({ property: l.changedAt, date: { before: to } });
@@ -62,8 +61,8 @@ export async function GET(req: NextRequest) {
   const pct = (n: number | null) => (n === null ? null : Math.round(n * 100));
   const history = results.map((pg) => ({
     id: pg.id,
-    elevation: readText(pg, l.title).replace(/\s-\sRep\s\d+$/, ""), // "[A203-3] - Rep 2" → "[A203-3]"
-    projectId: readRelationIds(pg, l.project)[0] ?? null,
+    elevation: readText(pg, l.title),
+    projectId: null,
     from: pct(readNumber(pg, l.from)),
     to: pct(readNumber(pg, l.to)),
     by: readText(pg, l.changedBy),
