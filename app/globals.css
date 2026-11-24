@@ -505,3 +505,34 @@ input:disabled, select:disabled { background: #eef1f5; color: var(--muted); }
   .reason-list { grid-template-columns: 1fr; }
 }
 .tree-row.all-done { background: #e3e7ec; color: #4a5563; }
+/* ---------- Report an issue (bottom of page) ---------- */
+.report-issue { margin: 18px 0 8px; text-align: center; }
+.report-issue-link {
+  background: none; border: 0; padding: 6px; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--muted); text-decoration: underline;
+}
+.report-issue-link:hover { color: var(--brand); }
+.report-issue-form { text-align: left; }
+.report-issue-title { font-weight: 700; color: var(--brand); margin-bottom: 10px; }
+.report-issue-types { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.report-issue-form textarea {
+  width: 100%; min-height: 96px; resize: vertical; font: inherit; font-size: 16px; padding: 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--text);
+}
+.report-issue-urgent { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; font-weight: 600; }
+.report-issue-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.report-issue-send { width: auto; padding: 10px 20px; }
+/* ---------- "Report an issue" button: red outline, easy to spot ---------- */
+.report-issue-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 18px;
+  border: 2px solid var(--err); border-radius: 999px;
+  background: #fdecea; color: var(--err);
+  font-size: 14px; font-weight: 700; text-decoration: none;
+}
+.report-issue-link::before { content: "⚠"; font-size: 15px; }
+.report-issue-link:hover { background: var(--err); color: #fff; }
+
+/* the form itself gets a red border too */
+.report-issue-form { border: 2px solid var(--err); }
+.report-issue-title { color: var(--err); }

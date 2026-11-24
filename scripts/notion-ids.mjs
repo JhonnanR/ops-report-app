@@ -35,6 +35,7 @@ const databases = {
   elevations: process.env.NOTION_ELEVATIONS_DB,
   log: process.env.NOTION_LOG_DB, // optional
   groups: process.env.NOTION_GROUPS_DB, // optional
+  appReports: process.env.NOTION_APP_REPORTS_DB, // optional
 };
 
 const current = JSON.parse(readFileSync(propsFile, "utf8"));
@@ -43,7 +44,7 @@ let problems = 0;
 
 for (const [group, dbId] of Object.entries(databases)) {
   if (!dbId) {
-    if (group === "log" || group === "groups") {
+    if (group === "log" || group === "groups" || group === "appReports") {
       console.log(`\n${group}: database ID not set in .env.local, skipped`);
       out[group] = current[group];
       continue;

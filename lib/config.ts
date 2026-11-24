@@ -34,6 +34,10 @@ export const config = {
   get groupsDb(): string | null {
     return process.env.NOTION_GROUPS_DB || null;
   },
+  /** App Reports DB (issues / change requests sent from the app). Optional: hides the form if not set. */
+  get appReportsDb(): string | null {
+    return process.env.NOTION_APP_REPORTS_DB || null;
+  },
   get showTestElevations() {
     return process.env.SHOW_TEST_ELEVATIONS === "true";
   },
@@ -55,4 +59,5 @@ export const props = {
   elevations: propsJson.elevations,
   log: propsJson.log,
   groups: propsJson.groups,
+  appReports: propsJson.appReports,
 };

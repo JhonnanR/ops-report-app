@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PickList from "@/components/PickList";
 import SearchSelect, { type Option } from "@/components/SearchSelect";
+import ReportIssue from "@/components/ReportIssue";
 import { timeAgo } from "@/lib/timeAgo";
 import {
   clearPhoneData,
@@ -1125,6 +1126,7 @@ export default function Tracker({
             ))}
         </div>
       )}
+      <ReportIssue page="Report" />
       {/* Room to scroll the elevation list into view on phones; goes away once an elevation is picked. */}
       {buildingId && !elevationId && <div className="scroll-room" aria-hidden="true" />}
     </main>

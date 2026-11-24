@@ -128,6 +128,13 @@ export async function POST(req: NextRequest) {
   });
 
   const now = new Date().toISOString();
+  
+  // Group members at the time of this report (Groups DB → Members), copied so later changes don't rewrite history.
+  let groupMembers = "";
+  if (groupId && l.groupMembers) {
+    const groupPage = await getPage(groupId).catch(() => null);
+    if (groupPage) groupMembers = readText(groupPage, props.groups.members).slice(0, 2000);
+  }
 
   // 2. Add a row to the history log (never blocks the save if it fails).
   let logged = false;
@@ -152,6 +159,10 @@ export async function POST(req: NextRequest) {
         [l.changedAt]: { date: { start: reportedAt } },
         // Group who did the work
         ...(groupId && l.group ? { [l.group]: { relation: [{ id: groupId }] } } : {}),
+        // Who was in that group at the time of the report
+        ...(groupMembers && l.groupMembers
+        ? { [l.groupMembers]: { rich_text: [{ text: { content: groupMembers } }] } }
+        : {}),
         // Unique report ID (duplicate check)
         ...(reportId && l.reportId ? { [l.reportId]: { rich_text: [{ text: { content: reportId } }] } } : {}),
         // Reason (Notion Select) + Other Reason (Text, only when "Other" was picked)

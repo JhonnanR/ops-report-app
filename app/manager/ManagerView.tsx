@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { timeAgo } from "@/lib/timeAgo";
 import PastReports from "./PastReports";
+import ReportIssue from "@/components/ReportIssue";
 
 type Project = {
   id: string;
@@ -719,6 +720,8 @@ export default function ManagerView({ userName }: { userName: string }) {
           </>
         )}
       </section>
+
+      <ReportIssue page="Manager view" />
     </main>
   );
 }
